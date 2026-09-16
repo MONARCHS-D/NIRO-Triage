@@ -299,7 +299,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         title: 'Speech transcription & translation created',
         description: 'Native Odia text converted and translated to English clinical schema.',
         source: 'AI_DRAFT',
-        actor: 'SwasthyaSetu Multimodal Engine',
+        actor: 'NIRO Triage Multimodal Engine',
       },
       {
         id: 'tl-3',
@@ -324,7 +324,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         title: 'Potential urgency signal tagged',
         description: 'Advisory flag: Respiratory concern triggered based on SpO₂ 91% and dyspnea.',
         source: 'AI_DRAFT',
-        actor: 'SwasthyaSetu Triage Engine',
+        actor: 'NIRO Triage Triage Engine',
       },
     ],
     auditLog: [
@@ -340,7 +340,7 @@ export const INITIAL_PATIENTS: Patient[] = [
       {
         id: 'aud-2',
         timestamp: '14 Aug · 11:43',
-        actor: 'SwasthyaSetu Engine',
+        actor: 'NIRO Triage Engine',
         actorRole: 'AI_AGENT',
         action: 'TRANSCRIBE_TRANSLATE',
         objectAffected: 'Transcript #TRN-811',
@@ -349,7 +349,7 @@ export const INITIAL_PATIENTS: Patient[] = [
       {
         id: 'aud-3',
         timestamp: '14 Aug · 11:43',
-        actor: 'SwasthyaSetu OCR',
+        actor: 'NIRO Triage OCR',
         actorRole: 'AI_AGENT',
         action: 'REPORT_EXTRACTION',
         objectAffected: 'Document #DOC-CBC-1042',
@@ -358,7 +358,7 @@ export const INITIAL_PATIENTS: Patient[] = [
       {
         id: 'aud-4',
         timestamp: '14 Aug · 11:44',
-        actor: 'SwasthyaSetu Triage Engine',
+        actor: 'NIRO Triage Triage Engine',
         actorRole: 'AI_AGENT',
         action: 'GENERATE_TRIAGE_DRAFT',
         objectAffected: 'Patient Note P-1042',
@@ -519,7 +519,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         title: 'Missing information flagged',
         description: 'System identified missing cardiac radiation check and ECG recommendation.',
         source: 'AI_DRAFT',
-        actor: 'SwasthyaSetu Engine',
+        actor: 'NIRO Triage Engine',
       },
     ],
     auditLog: [
@@ -535,7 +535,7 @@ export const INITIAL_PATIENTS: Patient[] = [
       {
         id: 'aud-202',
         timestamp: '14 Aug · 10:48',
-        actor: 'SwasthyaSetu Engine',
+        actor: 'NIRO Triage Engine',
         actorRole: 'AI_AGENT',
         action: 'GENERATE_TRIAGE_DRAFT',
         objectAffected: 'Patient Note P-1035',
@@ -665,7 +665,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         title: 'Assigned Green Routine Priority',
         description: 'Vital signs and blood counts stable; ready for standard general OPD review.',
         source: 'AI_DRAFT',
-        actor: 'SwasthyaSetu Engine',
+        actor: 'NIRO Triage Engine',
       },
     ],
     auditLog: [
@@ -681,7 +681,7 @@ export const INITIAL_PATIENTS: Patient[] = [
       {
         id: 'aud-302',
         timestamp: '14 Aug · 08:40',
-        actor: 'SwasthyaSetu Engine',
+        actor: 'NIRO Triage Engine',
         actorRole: 'AI_AGENT',
         action: 'GENERATE_TRIAGE_DRAFT',
         objectAffected: 'Patient Note P-1018',

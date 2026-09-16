@@ -28,7 +28,7 @@ interface TriageContextType {
 
 const TriageContext = createContext<TriageContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'swasthya_setu_patients_v1';
+const STORAGE_KEY = 'niro_triage_patients_v1';
 
 export function TriageProvider({ children }: { children: React.ReactNode }) {
   const { currentUser } = useRole();

@@ -42,11 +42,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab = 'dashboard', onSe
       {/* Brand Header */}
       <div className="p-4 border-b border-[#E6ECF2]">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center text-white font-bold text-base shadow-xs">
-            SS
+          <div className="w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center text-white font-bold text-xs shadow-xs tracking-tight">
+            NIRO
           </div>
           <div>
-            <h1 className="text-sm font-bold text-[#102033] tracking-tight">SwasthyaSetu</h1>
+            <h1 className="text-sm font-bold text-[#102033] tracking-tight">NIRO Triage</h1>
             <p className="text-[11px] text-[#6B7B8F] font-medium leading-none mt-0.5">People First. Care Faster.</p>
           </div>
         </div>

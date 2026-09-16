@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'SwasthyaSetu — Multimodal Healthcare Triage-Support Platform',
+  title: 'NIRO Triage — Multimodal Healthcare Triage-Support Platform',
   description:
     'Human-in-the-loop multimodal healthcare triage-support prototype for government and institutional health facilities in India. Fast information. Clear evidence. Human judgment.',
 };

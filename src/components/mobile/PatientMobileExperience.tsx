@@ -173,11 +173,11 @@ export const PatientMobileExperience: React.FC = () => {
       <div className="bg-white border-b border-[#E6ECF2] p-4 sticky top-0 z-20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-[#2563EB] text-white font-bold flex items-center justify-center text-xs">
-              SS
+            <div className="w-7 h-7 rounded-md bg-[#2563EB] text-white font-bold flex items-center justify-center text-[10px] tracking-tight">
+              NIRO
             </div>
             <div>
-              <h1 className="text-sm font-bold text-[#102033]">SwasthyaSetu</h1>
+              <h1 className="text-sm font-bold text-[#102033]">NIRO Triage</h1>
               <p className="text-[10px] text-[#6B7B8F]">Government Health Facility Portal</p>
             </div>
           </div>
