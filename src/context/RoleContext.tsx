@@ -11,14 +11,21 @@ interface RoleContextType {
   users: UserProfile[];
   viewMode: 'REVIEWER_DESKTOP' | 'PATIENT_MOBILE';
   isOffline: boolean;
+  isAuthenticated: boolean;
+  isSessionExpired: boolean;
   setCurrentUser: (user: UserProfile) => void;
   setCurrentFacility: (facility: Facility) => void;
   setUserRole: (role: UserRole) => void;
   setViewMode: (mode: 'REVIEWER_DESKTOP' | 'PATIENT_MOBILE') => void;
   setIsOffline: (offline: boolean) => void;
+  login: (staffIdOrEmail: string, password?: string) => boolean;
+  logout: () => void;
+  setIsSessionExpired: (expired: boolean) => void;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
+
+const AUTH_STORAGE_KEY = 'niro_auth_state_v1';
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile>(INITIAL_USERS[0]);
@@ -27,6 +34,14 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [users] = useState<UserProfile[]>(INITIAL_USERS);
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
   const [isOffline, setIsOffline] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      return stored ? stored === 'true' : true; // default true for smooth demo access
+    }
+    return true;
+  });
+  const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
 
   const setUserRole = (role: UserRole) => {
     const matched = users.find((u) => u.role === role);
@@ -40,6 +55,40 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const login = (staffIdOrEmail: string, password?: string): boolean => {
+    // Validate credentials: accept any non-empty input for prototype, or match known profiles
+    if (!staffIdOrEmail || staffIdOrEmail.trim().length === 0) {
+      return false;
+    }
+
+    const lower = staffIdOrEmail.toLowerCase();
+    if (lower.includes('nurse') || lower.includes('sunita')) {
+      setUserRole('NURSE');
+    } else if (lower.includes('cho') || lower.includes('ramesh') || lower.includes('health')) {
+      setUserRole('HEALTH_WORKER');
+    } else if (lower.includes('patient')) {
+      setUserRole('PATIENT');
+    } else if (lower.includes('admin')) {
+      setUserRole('ADMIN');
+    } else {
+      setUserRole('DOCTOR');
+    }
+
+    setIsAuthenticated(true);
+    setIsSessionExpired(false);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+    }
+    return true;
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(AUTH_STORAGE_KEY, 'false');
+    }
+  };
+
   return (
     <RoleContext.Provider
       value={{
@@ -49,11 +98,16 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         users,
         viewMode,
         isOffline,
+        isAuthenticated,
+        isSessionExpired,
         setCurrentUser,
         setCurrentFacility,
         setUserRole,
         setViewMode,
         setIsOffline,
+        login,
+        logout,
+        setIsSessionExpired,
       }}
     >
       {children}

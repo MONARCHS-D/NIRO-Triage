@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { Providers } from '../components/providers/Providers';
 
 export const metadata: Metadata = {
   title: 'NIRO Triage — Multimodal Healthcare Triage-Support Platform',
@@ -23,7 +24,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-[#F8FAFC] text-[#102033]">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
