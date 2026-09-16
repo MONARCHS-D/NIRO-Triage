@@ -1,26 +1,45 @@
 @import "tailwindcss";
+@import "../styles/tokens.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --font-sans: "Inter", "Noto Sans Devanagari", "Noto Sans Oriya", "Noto Sans Bengali", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-ink-950: #102033;
+  --color-ink-800: #25364A;
+  --color-ink-600: #526276;
+  --color-ink-500: #6B7B8F;
+  --color-ink-300: #B8C2CF;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-surface-0: #FFFFFF;
+  --color-surface-50: #F8FAFC;
+  --color-surface-100: #F1F5F9;
+  --color-surface-200: #E6ECF2;
+
+  --color-primary-700: #164FD6;
+  --color-primary-600: #2563EB;
+  --color-primary-500: #3B82F6;
+  --color-primary-100: #E8F0FF;
+
+  --color-success-700: #087443;
+  --color-success-600: #16A36A;
+  --color-success-100: #EAF8F1;
+
+  --color-warning-700: #996500;
+  --color-warning-600: #D99A18;
+  --color-warning-100: #FFF6DD;
+
+  --color-danger-700: #B3261E;
+  --color-danger-600: #E5484D;
+  --color-danger-100: #FDECEC;
+
+  --color-info-700: #1769AA;
+  --color-info-100: #E9F4FF;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #F8FAFC;
+  color: #102033;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
