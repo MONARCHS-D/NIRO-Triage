@@ -37,7 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
   ];
 
   return (
-    <aside className="w-60 flex-shrink-0 bg-white border-r border-[#E6ECF2] flex flex-col h-screen sticky top-0 select-none z-20">
+    <aside className="w-60 flex-shrink-0 bg-white border-r border-[#E6ECF2] flex flex-col h-screen sticky top-0 select-none z-40">
       {/* Brand Header */}
       <div className="p-4 border-b border-[#E6ECF2]">
         <Link href="/dashboard" className="flex items-center gap-2.5">
