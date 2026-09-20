@@ -4,6 +4,7 @@ import React from 'react';
 import Image from 'next/image';
 import { useRole } from '../../context/RoleContext';
 import { useTriage } from '../../context/TriageContext';
+import { UserRole } from '../../types/roles';
 import { Button } from '../common/Button';
 import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
 import {
@@ -119,18 +120,25 @@ export const SettingsView: React.FC = () => {
               <div>
                 <label className="block font-semibold text-[#25364A] mb-1">Switch Active Role (Demo):</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {(['doctor', 'nurse', 'admin', 'chw'] as const).map((r) => (
+                  {(
+                    [
+                      { role: 'DOCTOR', label: 'Doctor' },
+                      { role: 'NURSE', label: 'Nurse' },
+                      { role: 'ADMIN', label: 'Admin' },
+                      { role: 'HEALTH_WORKER', label: 'CHO / Worker' },
+                    ] as const satisfies { role: UserRole; label: string }[]
+                  ).map(({ role, label }) => (
                     <button
-                      key={r}
+                      key={role}
                       type="button"
-                      onClick={() => setUserRole(r)}
+                      onClick={() => setUserRole(role)}
                       className={`p-2 rounded-lg border text-xs font-semibold capitalize transition-colors cursor-pointer ${
-                        currentUser.role === (r === 'doctor' ? 'doctor' : r)
+                        currentUser.role === role
                           ? 'bg-[#2563EB] text-white border-[#2563EB]'
                           : 'bg-white text-[#25364A] border-[#E6ECF2] hover:bg-slate-50'
                       }`}
                     >
-                      {r === 'chw' ? 'CHO / Worker' : r}
+                      {label}
                     </button>
                   ))}
                 </div>
