@@ -1,3 +1,4 @@
+import 'ai_question.dart';
 import 'priority.dart';
 
 class Symptom {
@@ -170,6 +171,10 @@ class Patient {
   final List<RiskFlag> riskFlags;
   final List<TimelineEvent> timeline;
   final List<AuditLogItem> auditLog;
+  final List<AiFollowUpQuestion> aiQuestions;
+  final String clinicalSummary;
+  final String urgencyRationale;
+  final String routingRecommendation;
   final CaseStatus status;
   final Priority priority;
   final String facilityId;
@@ -194,6 +199,10 @@ class Patient {
     this.riskFlags = const [],
     this.timeline = const [],
     this.auditLog = const [],
+    this.aiQuestions = const [],
+    this.clinicalSummary = '',
+    this.urgencyRationale = '',
+    this.routingRecommendation = '',
     this.status = CaseStatus.pendingReview,
     this.priority = Priority.green,
     this.facilityId = 'fac-chc-1',
@@ -219,6 +228,10 @@ class Patient {
     List<RiskFlag>? riskFlags,
     List<TimelineEvent>? timeline,
     List<AuditLogItem>? auditLog,
+    List<AiFollowUpQuestion>? aiQuestions,
+    String? clinicalSummary,
+    String? urgencyRationale,
+    String? routingRecommendation,
     CaseStatus? status,
     Priority? priority,
     String? facilityId,
@@ -243,6 +256,10 @@ class Patient {
       riskFlags: riskFlags ?? this.riskFlags,
       timeline: timeline ?? this.timeline,
       auditLog: auditLog ?? this.auditLog,
+      aiQuestions: aiQuestions ?? this.aiQuestions,
+      clinicalSummary: clinicalSummary ?? this.clinicalSummary,
+      urgencyRationale: urgencyRationale ?? this.urgencyRationale,
+      routingRecommendation: routingRecommendation ?? this.routingRecommendation,
       status: status ?? this.status,
       priority: priority ?? this.priority,
       facilityId: facilityId ?? this.facilityId,

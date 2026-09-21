@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import 'data/repositories/triage_repository_impl.dart';
 import 'domain/repositories/triage_repository.dart';
 import 'ui/core/theme/app_theme.dart';
+import 'ui/features/auth/view_models/auth_view_model.dart';
 import 'ui/features/intake/view_models/intake_view_model.dart';
-import 'ui/features/shell/main_shell_screen.dart';
+import 'ui/features/reviewer/view_models/reviewer_view_model.dart';
+import 'ui/features/shell/app_gateway_screen.dart';
 import 'ui/features/visits/view_models/visits_view_model.dart';
 
 void main() {
@@ -25,6 +27,14 @@ class NiroTriageApp extends StatelessWidget {
           create: (_) => TriageRepositoryImpl(),
         ),
         // ViewModels
+        ChangeNotifierProvider<AuthViewModel>(
+          create: (_) => AuthViewModel(),
+        ),
+        ChangeNotifierProvider<ReviewerViewModel>(
+          create: (ctx) => ReviewerViewModel(
+            repository: ctx.read<ITriageRepository>(),
+          ),
+        ),
         ChangeNotifierProvider<IntakeViewModel>(
           create: (ctx) => IntakeViewModel(
             repository: ctx.read<ITriageRepository>(),
@@ -40,7 +50,7 @@ class NiroTriageApp extends StatelessWidget {
         title: 'NIRO Triage',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        home: const MainShellScreen(),
+        home: const AppGatewayScreen(),
       ),
     );
   }

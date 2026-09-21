@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:niro_mobile/domain/models/auth.dart';
 import 'package:niro_mobile/ui/core/theme/app_colors.dart';
+import 'package:niro_mobile/ui/core/widgets/logout_dialog.dart';
+import 'package:niro_mobile/ui/features/auth/view_models/auth_view_model.dart';
 import 'package:niro_mobile/ui/features/intake/view_models/intake_view_model.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -14,6 +17,13 @@ class ProfileScreen extends StatelessWidget {
       backgroundColor: AppColors.surface50,
       appBar: AppBar(
         title: const Text('Citizen Profile & Privacy'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: AppColors.danger600),
+            tooltip: 'Log Out Session',
+            onPressed: () => showLogoutConfirmationDialog(context),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -121,6 +131,73 @@ class ProfileScreen extends StatelessWidget {
 
               const SizedBox(height: 16),
 
+              // Switch to Clinical Staff Mode card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary600.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.medical_services_outlined,
+                            size: 20, color: AppColors.primary700),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Clinical Reviewer Workspace',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Switch to Medical Officer / Triage Nurse view to access the Triage Queue, Dashboard KPIs, and Hero Patient Workspace.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.ink800,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          context.read<AuthViewModel>().setRole(UserRole.medicalOfficer);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary600,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Switch to Clinical Reviewer Mode →',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
               // Privacy & Responsible AI (Section 21)
               Container(
                 padding: const EdgeInsets.all(16),
@@ -137,12 +214,14 @@ class ProfileScreen extends StatelessWidget {
                         Icon(Icons.shield_outlined,
                             size: 18, color: AppColors.primary600),
                         SizedBox(width: 8),
-                        Text(
-                          'Privacy & Responsible AI Policy',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.ink950,
+                        Expanded(
+                          child: Text(
+                            'Privacy & Responsible AI Policy',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink950,
+                            ),
                           ),
                         ),
                       ],
@@ -162,6 +241,34 @@ class ProfileScreen extends StatelessWidget {
                   ],
                 ),
               ),
+
+              const SizedBox(height: 20),
+
+              // Log Out Session Button
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: () => showLogoutConfirmationDialog(context),
+                  icon: const Icon(Icons.logout, size: 18, color: AppColors.danger600),
+                  label: const Text(
+                    'Log Out Session',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.danger600,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.danger600, width: 1.2),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    backgroundColor: AppColors.surface0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),

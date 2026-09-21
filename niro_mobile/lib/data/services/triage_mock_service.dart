@@ -1,3 +1,4 @@
+import 'package:niro_mobile/domain/models/ai_question.dart';
 import 'package:niro_mobile/domain/models/patient.dart';
 import 'package:niro_mobile/domain/models/priority.dart';
 
@@ -166,6 +167,31 @@ class TriageMockService {
             details: 'Voice intake recorded in Odia (34s duration)',
           ),
         ],
+        aiQuestions: [
+          AiFollowUpQuestion(
+            id: 'q-101',
+            question:
+                'Does the patient present with audible inspiratory stridor or severe wheezing?',
+            clinicalRationale:
+                'Distinguishes between upper airway obstruction and acute lower bronchospasm.',
+            relatedMissingInfoId: 'm-1',
+            options: ['Yes', 'No', 'Not sure'],
+          ),
+          AiFollowUpQuestion(
+            id: 'q-102',
+            question:
+                'Has the patient used their prescribed inhaler within the last 4 hours without symptom relief?',
+            clinicalRationale:
+                'Assesses bronchodilator responsiveness in known asthma.',
+            options: ['Yes', 'No', 'Not sure'],
+          ),
+        ],
+        clinicalSummary:
+            '28-year-old female presents with acute shortness of breath (orthopnea), chest tightness, and high fever (102.4°F) for 3 days. Triage nurse verified SpO2 at 91% and tachycardia (108 bpm). History of mild asthma. High risk for respiratory compromise requiring prompt physician evaluation.',
+        urgencyRationale:
+            'Critical Hypoxia (SpO2 91% on room air) with tachycardia (108 bpm) and severe dyspnea.',
+        routingRecommendation:
+            'Room 4 — Acute Respiratory Care & Oxygenation',
         status: CaseStatus.pendingReview,
         priority: Priority.red,
         facilityId: 'fac-chc-1',
@@ -260,6 +286,32 @@ class TriageMockService {
             details: 'Entered symptom text in Hindi',
           ),
         ],
+        aiQuestions: [
+          AiFollowUpQuestion(
+            id: 'q-201',
+            question:
+                'Does the epigastric pain radiate towards the left shoulder, neck, or jaw?',
+            clinicalRationale:
+                'Assesses potential atypical acute coronary syndrome presentation in an adult male.',
+            relatedMissingInfoId: 'm-3',
+            options: ['Yes', 'No', 'Not sure'],
+          ),
+          AiFollowUpQuestion(
+            id: 'q-202',
+            question:
+                'Is the pain alleviated by leaning forward or worsened after heavy meals?',
+            clinicalRationale:
+                'Assists in differentiating acute pancreatitis from acid peptic or biliary disorder.',
+            relatedMissingInfoId: 'm-3',
+            options: ['Yes', 'No', 'Not sure'],
+          ),
+        ],
+        clinicalSummary:
+            '45-year-old male reporting 2-day history of moderate epigastric pain radiating to back and nausea after meals. Submitted remote Hindi text intake. Missing essential triage vitals (Blood Pressure & Auscultation). Needs prompt in-person clinical workup to rule out acute pancreatitis, peptic ulcer, or atypical cardiac ischemia.',
+        urgencyRationale:
+            'Incomplete data: Upper abdominal discomfort radiating to back requires blood pressure check and clinical evaluation.',
+        routingRecommendation:
+            'Room 2 — Internal Medicine & Acute Evaluation',
         status: CaseStatus.needsMoreInfo,
         priority: Priority.yellow,
         facilityId: 'fac-chc-1',
@@ -362,8 +414,128 @@ class TriageMockService {
             details: 'Uploaded CBC report JPEG',
           ),
         ],
+        aiQuestions: [
+          AiFollowUpQuestion(
+            id: 'q-301',
+            question:
+                'Does the patient report severe unilateral throat pain or inability to swallow saliva?',
+            clinicalRationale:
+                'Screens for acute peritonsillar abscess or epiglottitis.',
+            options: ['Yes', 'No', 'Not sure'],
+          ),
+        ],
+        clinicalSummary:
+            '19-year-old female presenting with 1-day history of mild rhinorrhea, throat tickle, and low fever (99.1°F). Normal CBC lab parameters verified via OCR. Stable hemodynamics with 98% SpO2.',
+        urgencyRationale:
+            'Mild viral upper respiratory symptoms with normal hemodynamics and lab parameters.',
+        routingRecommendation:
+            'Room 1 — General Outpatient Department (OPD)',
         status: CaseStatus.approved,
         priority: Priority.green,
+        facilityId: 'fac-chc-1',
+      ),
+
+      // 4. Insufficient Information Benchmark Case: P-1055 (Sudden Dizziness, Unchecked Vitals)
+      const Patient(
+        id: 'P-1055',
+        syntheticCode: 'SYN-2026-004',
+        name: 'Deepak Mohanty',
+        age: 62,
+        gender: 'Male',
+        primaryLanguage: 'Odia',
+        translatedToEnglish: true,
+        contactMasked: '+91 91*** **562',
+        visitId: 'VST-2026-8804',
+        arrivalTime: 'Today · 11:45 AM',
+        chiefComplaint:
+            'Sudden episode of postural dizziness and lightheadedness when standing up this morning.',
+        symptoms: [
+          Symptom(
+            id: 'sym-8',
+            name: 'Orthostatic Dizziness',
+            duration: '4 hours',
+            severity: 'MODERATE',
+            source: 'VOICE',
+            confidence: 0.91,
+          ),
+        ],
+        relevantHistory: [
+          'History of hypertension on medication',
+          'Missed morning dosage',
+        ],
+        vitals: {},
+        facts: [],
+        missingInfo: [
+          MissingInfoItem(
+            id: 'm-4',
+            field: 'postural_bp',
+            label: 'Supine and Standing Blood Pressure',
+            category: 'VITALS',
+            status: 'NOT_PROVIDED',
+            reason:
+                'Mandatory to assess orthostatic hypotension in an elderly hypertensive patient.',
+            askPrompt: 'Measure supine BP followed by standing BP at 1 and 3 minutes.',
+          ),
+          MissingInfoItem(
+            id: 'm-5',
+            field: 'fingerstick_glucose',
+            label: 'Point-of-Care Capillary Glucose',
+            category: 'VITALS',
+            status: 'NOT_PROVIDED',
+            reason: 'Rule out acute hypoglycemic episode.',
+            askPrompt: 'Perform quick fingerstick random blood glucose check.',
+          ),
+        ],
+        riskFlags: [
+          RiskFlag(
+            id: 'rf-3',
+            type: 'INSUFFICIENT_INFORMATION',
+            severity: 'INCOMPLETE',
+            description:
+                'Elderly patient with new acute lightheadedness requires vital signs before safe triage priority can be finalized.',
+            evidenceIds: [],
+          ),
+        ],
+        timeline: [
+          TimelineEvent(
+            id: 't-7',
+            timestamp: '11:45 AM',
+            title: 'Patient registered at triage desk',
+            description: 'Assisted voice intake completed in Odia.',
+            source: 'VOICE',
+            actor: 'Deepak Mohanty',
+          ),
+        ],
+        auditLog: [
+          AuditLogItem(
+            id: 'a-4',
+            timestamp: '11:45 AM',
+            actor: 'Deepak Mohanty',
+            actorRole: 'Citizen / Patient',
+            action: 'SUBMIT_CITIZEN_VOICE_INTAKE',
+            objectAffected: 'P-1055',
+            details: 'Voice intake recorded in Odia (22s duration)',
+          ),
+        ],
+        aiQuestions: [
+          AiFollowUpQuestion(
+            id: 'q-401',
+            question:
+                'Did the patient experience true loss of consciousness (syncope) or fall?',
+            clinicalRationale:
+                'Differentiates presyncope/lightheadedness from completed syncopal attack or head trauma.',
+            relatedMissingInfoId: 'm-4',
+            options: ['Yes', 'No', 'Not sure'],
+          ),
+        ],
+        clinicalSummary:
+            '62-year-old male with hypertension presenting with acute onset postural lightheadedness. Vitals and capillary glucose pending. Critical baseline measurements needed before final clinical assignment.',
+        urgencyRationale:
+            'Insufficient information: Missing orthostatic BP and point-of-care glucose in an elderly symptomatic patient.',
+        routingRecommendation:
+            'Triage Nursing Station — Immediate Vital Sign Acquisition',
+        status: CaseStatus.pendingReview,
+        priority: Priority.grey,
         facilityId: 'fac-chc-1',
       ),
     ];
