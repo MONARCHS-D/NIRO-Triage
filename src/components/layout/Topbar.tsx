@@ -25,6 +25,7 @@ export const Topbar: React.FC = () => {
     setUserRole,
     isOffline,
     setIsOffline,
+    isBackendOnline,
   } = useRole();
   const { searchQuery, setSearchQuery, resetToDefaults } = useTriage();
 
@@ -103,6 +104,29 @@ export const Topbar: React.FC = () => {
               <option value="ADMIN">Facility Admin</option>
             </select>
             <ChevronDown className="w-3.5 h-3.5 text-[#164FD6] absolute right-2 pointer-events-none" />
+          </div>
+
+          {/* Backend Connection Status Badge */}
+          <div
+            title={
+              isBackendOnline
+                ? 'Connected to Spring Boot backend (port 9090)'
+                : 'Local prototype mode (backend offline)'
+            }
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border ${
+              isBackendOnline
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : 'bg-slate-50 border-slate-200 text-slate-500'
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isBackendOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
+              }`}
+            />
+            <span className="text-[11px]">
+              {isBackendOnline ? 'Backend: 9090' : 'Demo Mode'}
+            </span>
           </div>
 
           {/* Offline Mode Toggle Button */}

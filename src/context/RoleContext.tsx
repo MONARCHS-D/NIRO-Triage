@@ -1,8 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Facility, UserProfile, UserRole } from '../types/roles';
 import { INITIAL_FACILITIES, INITIAL_USERS } from '../lib/syntheticData';
+import { checkBackendHealth, tokenStorage } from '../lib/api/client';
 
 interface RoleContextType {
   currentUser: UserProfile;
@@ -13,6 +14,9 @@ interface RoleContextType {
   isOffline: boolean;
   isAuthenticated: boolean;
   isSessionExpired: boolean;
+  accessToken: string | null;
+  isBackendOnline: boolean | null;
+  backendLatency: number | null;
   setCurrentUser: (user: UserProfile) => void;
   setCurrentFacility: (facility: Facility) => void;
   setUserRole: (role: UserRole) => void;
@@ -21,37 +25,91 @@ interface RoleContextType {
   login: (staffIdOrEmail: string, password?: string) => boolean;
   logout: () => void;
   setIsSessionExpired: (expired: boolean) => void;
+  saveAuthSession: (
+    tokens: { accessToken: string; refreshToken?: string },
+    user?: Partial<UserProfile>,
+    facility?: Partial<Facility>
+  ) => void;
+  addOrSelectFacility: (newFacility: Facility) => void;
+  refreshBackendHealth: () => Promise<void>;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 const AUTH_STORAGE_KEY = 'niro_auth_state_v1';
+const USER_STORAGE_KEY = 'niro_active_user_v1';
+const FACILITY_STORAGE_KEY = 'niro_active_facility_v1';
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile>(INITIAL_USERS[0]);
   const [currentFacility, setCurrentFacility] = useState<Facility>(INITIAL_FACILITIES[0]);
-  const [facilities] = useState<Facility[]>(INITIAL_FACILITIES);
-  const [users] = useState<UserProfile[]>(INITIAL_USERS);
+  const [facilities, setFacilities] = useState<Facility[]>(INITIAL_FACILITIES);
+  const [users, setUsers] = useState<UserProfile[]>(INITIAL_USERS);
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isBackendOnline, setIsBackendOnline] = useState<boolean | null>(null);
+  const [backendLatency, setBackendLatency] = useState<number | null>(null);
+
+  const refreshBackendHealth = useCallback(async () => {
+    try {
+      const res = await checkBackendHealth();
+      setIsBackendOnline(res.isOnline);
+      setBackendLatency(res.latencyMs);
+    } catch {
+      setIsBackendOnline(false);
+      setBackendLatency(null);
+    }
+  }, []);
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored !== null) {
-        setIsAuthenticated(stored === 'true');
+      const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (storedAuth !== null) {
+        setIsAuthenticated(storedAuth === 'true');
+      }
+
+      const storedToken = tokenStorage.getAccessToken();
+      if (storedToken) {
+        setAccessToken(storedToken);
+      }
+
+      const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+      if (storedUser) {
+        try {
+          setCurrentUser(JSON.parse(storedUser));
+        } catch {
+          // ignore parsing error
+        }
+      }
+
+      const storedFacility = localStorage.getItem(FACILITY_STORAGE_KEY);
+      if (storedFacility) {
+        try {
+          const parsed = JSON.parse(storedFacility);
+          setCurrentFacility(parsed);
+          setFacilities((prev) => (prev.some((f) => f.id === parsed.id) ? prev : [parsed, ...prev]));
+        } catch {
+          // ignore parsing error
+        }
       }
     } catch {
       // ignore storage errors
     }
-  }, []);
+
+    // Check backend health asynchronously
+    refreshBackendHealth();
+  }, [refreshBackendHealth]);
 
   const setUserRole = (role: UserRole) => {
     const matched = users.find((u) => u.role === role);
     if (matched) {
       setCurrentUser(matched);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(matched));
+      }
       if (role === 'PATIENT') {
         setViewMode('PATIENT_MOBILE');
       } else if (viewMode === 'PATIENT_MOBILE') {
@@ -60,25 +118,80 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const addOrSelectFacility = (newFacility: Facility) => {
+    setFacilities((prev) => {
+      const exists = prev.some((f) => f.id === newFacility.id || f.code === newFacility.code);
+      return exists ? prev : [newFacility, ...prev];
+    });
+    setCurrentFacility(newFacility);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(FACILITY_STORAGE_KEY, JSON.stringify(newFacility));
+    }
+  };
+
+  const saveAuthSession = (
+    tokens: { accessToken: string; refreshToken?: string },
+    user?: Partial<UserProfile>,
+    facility?: Partial<Facility>
+  ) => {
+    tokenStorage.setTokens(tokens.accessToken, tokens.refreshToken || '');
+    setAccessToken(tokens.accessToken);
+    setIsAuthenticated(true);
+    setIsSessionExpired(false);
+
+    if (user) {
+      const updatedUser: UserProfile = {
+        id: user.id || currentUser.id,
+        name: user.name || currentUser.name,
+        role: user.role || currentUser.role,
+        title: user.title || currentUser.title,
+        facility: facility?.name || user.facility || currentUser.facility,
+        department: user.department || currentUser.department,
+        registrationNumber: user.registrationNumber || currentUser.registrationNumber,
+      };
+      setCurrentUser(updatedUser);
+      setUsers((prev) => [updatedUser, ...prev.filter((u) => u.id !== updatedUser.id)]);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
+      }
+    }
+
+    if (facility) {
+      const updatedFacility: Facility = {
+        id: facility.id || currentFacility.id,
+        name: facility.name || currentFacility.name,
+        code: facility.code || currentFacility.code,
+        type: facility.type || currentFacility.type,
+        district: facility.district || currentFacility.district,
+        state: facility.state || currentFacility.state,
+        activePatients: facility.activePatients ?? currentFacility.activePatients,
+      };
+      addOrSelectFacility(updatedFacility);
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+    }
+  };
+
   const login = (staffIdOrEmail: string, password?: string): boolean => {
-    // Validate credentials: accept any non-empty input for prototype, or match known profiles
     if (!staffIdOrEmail || staffIdOrEmail.trim().length === 0) {
       return false;
     }
 
     const lower = staffIdOrEmail.toLowerCase();
+    let targetRole: UserRole = 'DOCTOR';
     if (lower.includes('nurse') || lower.includes('sunita')) {
-      setUserRole('NURSE');
+      targetRole = 'NURSE';
     } else if (lower.includes('cho') || lower.includes('ramesh') || lower.includes('health')) {
-      setUserRole('HEALTH_WORKER');
+      targetRole = 'HEALTH_WORKER';
     } else if (lower.includes('patient')) {
-      setUserRole('PATIENT');
+      targetRole = 'PATIENT';
     } else if (lower.includes('admin')) {
-      setUserRole('ADMIN');
-    } else {
-      setUserRole('DOCTOR');
+      targetRole = 'ADMIN';
     }
 
+    setUserRole(targetRole);
     setIsAuthenticated(true);
     setIsSessionExpired(false);
     if (typeof window !== 'undefined') {
@@ -89,6 +202,8 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     setIsAuthenticated(false);
+    setAccessToken(null);
+    tokenStorage.clearTokens();
     if (typeof window !== 'undefined') {
       localStorage.setItem(AUTH_STORAGE_KEY, 'false');
     }
@@ -105,6 +220,9 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         isOffline,
         isAuthenticated,
         isSessionExpired,
+        accessToken,
+        isBackendOnline,
+        backendLatency,
         setCurrentUser,
         setCurrentFacility,
         setUserRole,
@@ -113,6 +231,9 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         setIsSessionExpired,
+        saveAuthSession,
+        addOrSelectFacility,
+        refreshBackendHealth,
       }}
     >
       {children}

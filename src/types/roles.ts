@@ -15,7 +15,7 @@ export interface Facility {
   id: string;
   name: string;
   code: string;
-  type: 'CHC' | 'PHC' | 'DISTRICT_HOSPITAL' | 'CAMP' | 'INDUSTRIAL_HEALTH_UNIT';
+  type: 'CHC' | 'PHC' | 'DISTRICT_HOSPITAL' | 'CAMP' | 'CLINIC' | 'INDUSTRIAL_HEALTH_UNIT';
   district: string;
   state: string;
   activePatients: number;

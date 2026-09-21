@@ -331,16 +331,25 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {/* Create account link per mockup */}
-              <div className="text-center text-xs text-slate-500 pt-0.5">
-                <span>Don&apos;t have an account? </span>
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoLogin('doctor')}
-                  className="text-blue-600 hover:underline font-semibold cursor-pointer"
-                >
-                  Request demo access
-                </button>
+              {/* Facility Onboarding and Staff Activation Links */}
+              <div className="pt-2 border-t border-slate-100 space-y-1.5 text-center text-xs">
+                <div className="text-slate-600">
+                  <span>Setting up a new hospital or clinic? </span>
+                  <Link
+                    href="/auth/register-facility"
+                    className="text-blue-600 hover:underline font-semibold"
+                  >
+                    Register Facility
+                  </Link>
+                </div>
+                <div>
+                  <Link
+                    href="/auth/activate"
+                    className="text-[11px] text-slate-500 hover:text-blue-600 hover:underline font-medium"
+                  >
+                    Have an invite token? Activate Staff Account →
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
