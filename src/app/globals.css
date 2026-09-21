@@ -63,3 +63,18 @@ body {
   animation: ocrScan 2.2s ease-in-out infinite;
 }
 
+/* Compact Blue Dotted Grid Diagonal Wave Animation */
+@keyframes diagonalGridSweep {
+  0% {
+    transform: translate3d(-65%, -65%, 0);
+  }
+  100% {
+    transform: translate3d(65%, 65%, 0);
+  }
+}
+
+.animate-diagonal-sweep {
+  animation: diagonalGridSweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+

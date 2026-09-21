@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useTriage } from '../../context/TriageContext';
 import { useRole } from '../../context/RoleContext';
 import { KpiCard } from '../common/KpiCard';
+import { SkeletonKpiCard, SkeletonTable } from '../common/SkeletonGrid';
 import { PriorityBadge, StatusBadge } from '../common/Badge';
 import { Button } from '../common/Button';
 import {
@@ -97,7 +98,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {showSkeleton ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-28 bg-slate-200/70 rounded-lg animate-pulse" />
+            <SkeletonKpiCard key={i} />
           ))}
         </div>
       ) : (
@@ -199,11 +200,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Patient Table (Section 6 Columns: # | Patient | Age/Sex | Chief Complaint | Priority | Status | Time | Action) */}
         {showSkeleton ? (
-          <div className="p-6 space-y-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-12 bg-slate-100 rounded-md animate-pulse" />
-            ))}
-          </div>
+          <SkeletonTable rows={4} />
         ) : filteredPatients.length === 0 ? (
           /* Empty State (Section 6 & 15.1) */
           <EmptyStateIllustration
