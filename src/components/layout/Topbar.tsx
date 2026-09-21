@@ -29,7 +29,7 @@ export const Topbar: React.FC = () => {
   const { searchQuery, setSearchQuery, resetToDefaults } = useTriage();
 
   return (
-    <header className="sticky top-0 z-10 bg-white border-b border-[#E6ECF2] shadow-xs">
+    <header className="sticky top-0 z-40 bg-white border-b border-[#E6ECF2] shadow-xs">
       {/* Top operational disclaimer banner */}
       <div className="bg-[#102033] text-white text-[11px] px-4 py-1 flex items-center justify-between font-medium">
         <div className="flex items-center gap-2">

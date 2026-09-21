@@ -19,6 +19,9 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { Priority } from '../../types/triage';
+import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
+import { DataFlowMotif } from '../motifs/DataFlowMotif';
+import { EmptyStateIllustration } from '../illustrations/EmptyStateIllustration';
 
 interface DashboardViewProps {
   onOpenPatient: (patientId: string) => void;
@@ -55,7 +58,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative overflow-hidden">
+      {/* Section 5.1 & 19: Subtle technical coordinate grid */}
+      <AppAmbientGrid opacity={0.05} position="top-right" />
       {/* Header section (Section 6) */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -200,19 +205,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             ))}
           </div>
         ) : filteredPatients.length === 0 ? (
-          /* Empty State (Section 6) */
-          <div className="p-12 text-center">
-            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400 mb-3">
-              <Filter className="w-6 h-6" />
-            </div>
-            <h3 className="text-sm font-bold text-[#102033]">No patients in this queue.</h3>
-            <p className="text-xs text-[#6B7B8F] mt-1 mb-4">
-              New intake cases will appear here.
-            </p>
-            <Button variant="primary" size="md" onClick={onNewIntake}>
-              Start New Intake
-            </Button>
-          </div>
+          /* Empty State (Section 6 & 15.1) */
+          <EmptyStateIllustration
+            title="No patients in this queue"
+            description="All active cases in this filter have been reviewed. New intake cases will appear here automatically."
+            action={
+              <Button variant="primary" size="md" onClick={onNewIntake} icon={<PlusCircle className="w-4 h-4" />}>
+                Start New Intake
+              </Button>
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -298,6 +300,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </table>
           </div>
         )}
+      </div>
+
+      {/* Section 5.2: "Care reaches further" data curve motif */}
+      <div className="flex items-center justify-between pt-2 px-1 text-[11px] text-[#6B7B8F]">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Workstation connected · Live sync active across CHC network</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline text-[10px] text-slate-400 font-mono">CONTINUITY OF CARE</span>
+          <DataFlowMotif width={220} height={48} opacity={0.35} />
+        </div>
       </div>
     </div>
   );
