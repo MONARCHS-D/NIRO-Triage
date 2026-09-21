@@ -22,6 +22,7 @@ import {
   Wind,
 } from 'lucide-react';
 import { useTriage } from '../../context/TriageContext';
+import { AiOrganizationIllustration } from '../illustrations/AiOrganizationIllustration';
 
 interface SummaryTabProps {
   patient: Patient;
@@ -319,6 +320,19 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
                   {summaryText}
                 </p>
               )}
+            </div>
+
+            {/* Section 18: AI Transparency - Information organization symbol */}
+            <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-center gap-4 bg-[#F8FAFC]/80 p-3 rounded-lg border border-slate-200/60">
+              <AiOrganizationIllustration width={120} height={76} className="flex-shrink-0" />
+              <div className="text-[11px] text-[#526276] leading-relaxed">
+                <span className="font-bold text-[#102033] block mb-0.5">
+                  AI Information Structuring &amp; Provenance
+                </span>
+                <span>
+                  Synthesizes speech statements, extracted laboratory values, and reported timeline into an organized note draft. Does not diagnose or formulate independent treatment plans.
+                </span>
+              </div>
             </div>
 
             {/* Non-diagnostic disclaimer footer */}

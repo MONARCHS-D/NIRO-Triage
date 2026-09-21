@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Button } from '../common/Button';
 import { VoiceIntakeStudio } from '../intake/VoiceIntakeStudio';
 import { ReportExtractStudio } from '../intake/ReportExtractStudio';
@@ -175,10 +176,10 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         {/* Stepper Bar: 1 Patient Info → 2 Input Details → 3 Review */}
         <div className="flex items-center justify-between relative max-w-xl mx-auto">
           {/* Connector line */}
-          <div className="absolute left-6 right-6 top-4 h-0.5 bg-slate-200 -z-0" />
+          <div className="absolute left-6 right-6 top-4 h-0.5 bg-slate-200 z-0" />
 
           {/* Step 1 */}
-          <div className="flex flex-col items-center relative z-10">
+          <div className="flex flex-col items-center relative z-1">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
                 currentStep >= 1
@@ -192,7 +193,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
           </div>
 
           {/* Step 2 */}
-          <div className="flex flex-col items-center relative z-10">
+          <div className="flex flex-col items-center relative z-1">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
                 currentStep >= 2
@@ -212,7 +213,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
           </div>
 
           {/* Step 3 */}
-          <div className="flex flex-col items-center relative z-10">
+          <div className="flex flex-col items-center relative z-1">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
                 currentStep === 3
@@ -233,82 +234,130 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         </div>
       </div>
 
-      {/* Step 1: Patient Info & Consent */}
+      {/* Step 1: Patient Info & Consent (Section 6) */}
       {currentStep === 1 && (
-        <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-6">
-          <h3 className="text-base font-bold text-[#102033]">Basic Patient Demographics</h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Demographics Form */}
+          <div className="lg:col-span-7 xl:col-span-8 bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-6">
             <div>
-              <label className="block font-semibold text-[#25364A] mb-1">
-                Full Name / ରୋଗୀଙ୍କ ନାମ:
+              <h3 className="text-base font-bold text-[#102033]">Basic Patient Demographics</h3>
+              <p className="text-xs text-[#6B7B8F] mt-0.5">
+                Register identity and obtain patient triage consent before beginning clinical session
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label className="block font-semibold text-[#25364A] mb-1">
+                  Full Name / ରୋଗୀଙ୍କ ନାମ:
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#25364A] mb-1">Age (Years):</label>
+                <input
+                  type="number"
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#25364A] mb-1">Gender / ଲିଙ୍ଗ:</label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value as any)}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none bg-white"
+                >
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#25364A] mb-1">Contact Phone (Optional):</label>
+                <input
+                  type="text"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Consent Checkbox Box (Section 21) */}
+            <div className="p-4 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+              <label className="flex items-start gap-3 select-none cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentGranted}
+                  onChange={(e) => setConsentGranted(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-slate-300 text-[#2563EB] focus:ring-blue-500 cursor-pointer"
+                />
+                <div className="text-xs">
+                  <span className="font-semibold text-[#102033] block">
+                    Use my information for this triage-support session
+                  </span>
+                  <span className="text-[#6B7B8F] leading-relaxed">
+                    We will use the information you provide to organize it for review by qualified healthcare staff.
+                  </span>
+                </div>
               </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
-              />
             </div>
 
-            <div>
-              <label className="block font-semibold text-[#25364A] mb-1">Age (Years):</label>
-              <input
-                type="number"
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-[#25364A] mb-1">Gender / ଲିଙ୍ଗ:</label>
-              <select
-                value={gender}
-                onChange={(e) => setGender(e.target.value as any)}
-                className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none bg-white"
-              >
-                <option value="Female">Female</option>
-                <option value="Male">Male</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-[#25364A] mb-1">Contact Phone (Optional):</label>
-              <input
-                type="text"
-                value={contact}
-                onChange={(e) => setContact(e.target.value)}
-                className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
-              />
+            <div className="flex justify-end gap-3 pt-4 border-t border-[#E6ECF2]">
+              <Button variant="primary" size="lg" onClick={handleNextFromStep1} icon={<ArrowRight className="w-4 h-4" />}>
+                Next: Select Input Mode
+              </Button>
             </div>
           </div>
 
-          {/* Consent Checkbox Box (Section 21) */}
-          <div className="p-4 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
-            <label className="flex items-start gap-3 select-none cursor-pointer">
-              <input
-                type="checkbox"
-                checked={consentGranted}
-                onChange={(e) => setConsentGranted(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-[#2563EB] focus:ring-blue-500 cursor-pointer"
-              />
-              <div className="text-xs">
-                <span className="font-semibold text-[#102033] block">
-                  Use my information for this triage-support session
+          {/* Right Column: Section 6.1 Multilingual Human Illustration & Language Tags */}
+          <div className="lg:col-span-5 xl:col-span-4 bg-gradient-to-b from-[#F0F6FF] to-white rounded-xl border border-blue-100 p-5 shadow-xs flex flex-col justify-between overflow-hidden">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#2563EB] block mb-1">
+                Multimodal Intake Support
+              </span>
+              <h4 className="text-sm font-bold text-[#102033]">
+                Regional Speech &amp; Voice Intake
+              </h4>
+              <p className="text-xs text-[#526276] mt-1 leading-relaxed">
+                Patients can speak naturally in their mother tongue. NIRO transcribes and structures chief complaints directly.
+              </p>
+
+              {/* Native Language Badges rendered in React per Section 6.1 */}
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                <span className="px-2 py-0.5 rounded-full bg-white border border-blue-200 text-[#164FD6] text-[11px] font-semibold shadow-2xs">
+                  Odia (ଓଡ଼ିଆ)
                 </span>
-                <span className="text-[#6B7B8F] leading-relaxed">
-                  We will use the information you provide to organize it for review by qualified healthcare staff.
+                <span className="px-2 py-0.5 rounded-full bg-white border border-blue-200 text-[#164FD6] text-[11px] font-semibold shadow-2xs">
+                  Hindi (हिन्दी)
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-white border border-blue-200 text-[#164FD6] text-[11px] font-semibold shadow-2xs">
+                  English
                 </span>
               </div>
-            </label>
-          </div>
+            </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#E6ECF2]">
-            <Button variant="primary" size="lg" onClick={handleNextFromStep1} icon={<ArrowRight className="w-4 h-4" />}>
-              Next: Select Input Mode
-            </Button>
+            {/* Illustration */}
+            <div className="relative w-full h-72 mt-4 rounded-xl overflow-hidden border border-blue-100/60 bg-white/70 shadow-2xs">
+              <Image
+                src="/illustrations/intake/multilingual_user.png"
+                alt="Multilingual patient voice assistant illustration"
+                fill
+                priority
+                sizes="(max-width: 1024px) 100vw, 400px"
+                className="object-contain object-right-bottom"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -465,12 +514,32 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         </div>
       )}
 
-      {/* Step 3: Review & Submit (Section 7) */}
+      {/* Step 3: Review & Submit (Section 7 & 14.2) */}
       {currentStep === 3 && (
-        <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-6">
-          <div className="flex items-center gap-2 text-emerald-700">
-            <CheckCircle2 className="w-5 h-5" />
-            <h3 className="text-base font-bold text-[#102033]">Review Intake Before Dispatching</h3>
+        <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 sm:p-8 shadow-xs space-y-6">
+          {/* Section 14.2: Success & Confirmation Header */}
+          <div className="flex flex-col sm:flex-row items-center gap-5 p-5 rounded-xl bg-gradient-to-r from-emerald-50/70 via-teal-50/50 to-blue-50/60 border border-emerald-100">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0">
+              <Image
+                src="/illustrations/states/success.png"
+                alt="Intake information successfully recorded illustration"
+                fill
+                priority
+                sizes="112px"
+                className="object-contain"
+              />
+            </div>
+            <div className="text-center sm:text-left space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full inline-block">
+                Information Successfully Recorded
+              </span>
+              <h3 className="text-lg font-bold text-[#102033]">
+                Ready for Clinical Triage Review
+              </h3>
+              <p className="text-xs text-[#526276] leading-relaxed max-w-lg">
+                Your information has been recorded. A healthcare professional will review it in the operational triage queue.
+              </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">

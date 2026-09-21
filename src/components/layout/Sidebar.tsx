@@ -11,7 +11,6 @@ import {
   Mic,
   Settings,
   ShieldCheck,
-  Smartphone,
   Hospital,
   LogOut,
 } from 'lucide-react';
@@ -24,7 +23,7 @@ export interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => {
   const pathname = usePathname();
-  const { currentUser, currentFacility, viewMode, setViewMode, logout } = useRole();
+  const { currentUser, currentFacility, logout } = useRole();
 
   // Section 33: Must-build MVP Navigation items
   const navItems = [
@@ -37,7 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
   ];
 
   return (
-    <aside className="w-60 flex-shrink-0 bg-white border-r border-[#E6ECF2] flex flex-col h-screen sticky top-0 select-none z-20">
+    <aside className="w-60 flex-shrink-0 bg-white border-r border-[#E6ECF2] flex flex-col h-screen sticky top-0 select-none z-40">
       {/* Brand Header */}
       <div className="p-4 border-b border-[#E6ECF2]">
         <Link href="/dashboard" className="flex items-center gap-2.5">
@@ -74,26 +73,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
             </Link>
           );
         })}
-
-        {/* View Mode Switcher */}
-        <div className="pt-4 mt-4 border-t border-[#E6ECF2]">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7B8F] px-3 py-1.5">
-            Experience Mode
-          </div>
-          <button
-            type="button"
-            onClick={() => setViewMode(viewMode === 'REVIEWER_DESKTOP' ? 'PATIENT_MOBILE' : 'REVIEWER_DESKTOP')}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium border border-[#E6ECF2] bg-[#F8FAFC] hover:bg-slate-100 text-[#25364A] cursor-pointer"
-          >
-            <span className="flex items-center gap-2">
-              <Smartphone className="w-3.5 h-3.5 text-[#2563EB]" />
-              <span>{viewMode === 'REVIEWER_DESKTOP' ? 'Switch to Patient App' : 'Switch to Reviewer'}</span>
-            </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">
-              {viewMode === 'REVIEWER_DESKTOP' ? 'Mobile' : 'Desk'}
-            </span>
-          </button>
-        </div>
       </nav>
 
       {/* User / Reviewer Profile Card */}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import {
   Mic,
   Square,
@@ -193,8 +194,18 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
             />
           </div>
 
-          {/* Large Audio Display Area */}
-          <div className="my-4 p-6 rounded-xl bg-[#F8FAFC] border border-[#E6ECF2] flex flex-col items-center justify-center min-h-[220px]">
+          {/* Large Audio Display Area with Section 8.1 Processing Gradient */}
+          <div
+            className={`my-4 p-6 rounded-xl border border-[#E6ECF2] flex flex-col items-center justify-center min-h-[220px] transition-all duration-700 relative overflow-hidden ${
+              voiceState === 'PROCESSING' || voiceState === 'TRANSCRIBING'
+                ? 'bg-gradient-to-br from-blue-50/90 via-teal-50/70 to-indigo-50/80 shadow-inner'
+                : 'bg-[#F8FAFC]'
+            }`}
+          >
+            {/* Ambient subtle glow when processing */}
+            {(voiceState === 'PROCESSING' || voiceState === 'TRANSCRIBING') && (
+              <div className="absolute inset-0 bg-radial from-blue-400/10 via-transparent to-transparent animate-pulse pointer-events-none" />
+            )}
             {/* State Badge */}
             <div className="mb-4">
               {voiceState === 'IDLE' && (
@@ -339,19 +350,32 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
               </Button>
             )}
 
-            {/* Error fallback state from Section 8 */}
+            {/* Section 16.2: Voice failure compact editorial state */}
             {voiceState === 'FAILURE' && (
-              <div className="w-full mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-center">
-                <p className="text-xs text-[#B3261E] font-medium">
-                  We couldn&apos;t understand part of the recording.
-                </p>
-                <div className="mt-2 flex items-center justify-center gap-2">
-                  <Button variant="secondary" size="sm" onClick={resetRecording}>
-                    Try again
+              <div className="w-full mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-3 animate-in fade-in duration-200">
+                <div className="relative w-20 h-20 mx-auto">
+                  <Image
+                    src="/illustrations/states/voice_error.png"
+                    alt="Audio input interrupted illustration"
+                    fill
+                    priority
+                    sizes="80px"
+                    className="object-contain"
+                  />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[#102033]">Audio Input Interrupted or Unclear</h4>
+                  <p className="text-[11px] text-[#6B7B8F] mt-0.5 max-w-xs mx-auto leading-normal">
+                    Could not cleanly isolate speech audio. Tap below to retry recording or enter symptoms via keyboard.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <Button variant="secondary" size="sm" onClick={resetRecording} icon={<RotateCcw className="w-3.5 h-3.5" />}>
+                    Try Recording Again
                   </Button>
                   {onSwitchToType && (
                     <Button variant="primary" size="sm" onClick={onSwitchToType}>
-                      Type instead
+                      Type Instead
                     </Button>
                   )}
                 </div>

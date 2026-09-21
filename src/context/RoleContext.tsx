@@ -34,14 +34,19 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [users] = useState<UserProfile[]>(INITIAL_USERS);
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
   const [isOffline, setIsOffline] = useState<boolean>(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      return stored ? stored === 'true' : true; // default true for smooth demo access
-    }
-    return true;
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (stored !== null) {
+        setIsAuthenticated(stored === 'true');
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
 
   const setUserRole = (role: UserRole) => {
     const matched = users.find((u) => u.role === role);

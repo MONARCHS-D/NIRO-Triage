@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import {
   FileText,
   Upload,
@@ -16,6 +17,7 @@ import {
   FileCheck,
   Eye,
   Plus,
+  Scan,
 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { SAMPLE_REPORTS, ReportDocument } from '../../lib/ocrSimulator';
@@ -38,6 +40,14 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
   const [editingFactId, setEditingFactId] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<string>('');
   const [isSimulatingOcrFailure, setIsSimulatingOcrFailure] = useState<boolean>(false);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+
+  const triggerScan = () => {
+    setIsScanning(true);
+    setTimeout(() => {
+      setIsScanning(false);
+    }, 2200);
+  };
 
   const handleEditClick = (fact: ExtractedFact) => {
     setEditingFactId(fact.id);
@@ -119,35 +129,57 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
         </div>
       </div>
 
-      {/* Success / Uncertainty notice banner */}
+      {/* Success / Uncertainty notice banner with Section 16.1 OCR Failure Illustration */}
       {isSimulatingOcrFailure ? (
-        <div className="bg-[#FFF6DD] border-b border-[#FDE68A] px-4 py-2.5 flex items-center justify-between text-xs text-[#996500]">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-[#D99A18] flex-shrink-0" />
-            <span>Some fields could not be read clearly due to faint hospital print.</span>
+        <div className="bg-[#FFF9EE] border-b border-[#FDE68A] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[#996500]">
+          <div className="flex items-center gap-3">
+            <div className="relative w-12 h-12 flex-shrink-0">
+              <Image
+                src="/illustrations/states/ocr_error.png"
+                alt="Document broken extraction indicator illustration"
+                fill
+                priority
+                sizes="48px"
+                className="object-contain"
+              />
+            </div>
+            <div>
+              <span className="font-bold text-[#102033] block">
+                Broken Extraction Indicator (Non-Fatal Notice)
+              </span>
+              <span className="text-[#6B7B8F] text-[11px]">
+                Could not read 1 parameter with full confidence due to faint ink. Original values preserved.
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsSimulatingOcrFailure(false)}
-              className="font-medium underline hover:text-[#784f00] cursor-pointer"
+              className="px-2.5 py-1 rounded bg-amber-100/70 border border-amber-300 font-semibold text-amber-900 hover:bg-amber-100 cursor-pointer text-[11px]"
             >
-              Review document
+              Clear Simulation
             </button>
-            <span className="text-amber-400">|</span>
             <button
               onClick={() => {
                 alert('Opened manual entry mode for unreadable fields.');
               }}
-              className="font-medium underline hover:text-[#784f00] cursor-pointer"
+              className="px-2.5 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 cursor-pointer text-[11px]"
             >
               Enter manually
             </button>
           </div>
         </div>
       ) : (
-        <div className="bg-[#EAF8F1] border-b border-[#A7F3D0] px-4 py-2 flex items-center gap-2 text-xs text-[#087443] font-medium">
-          <CheckCircle2 className="w-4 h-4 text-[#16A36A] flex-shrink-0" />
-          <span>✓ Information extracted successfully. Please verify and edit values if needed.</span>
+        <div className="bg-[#EAF8F1] border-b border-[#A7F3D0] px-4 py-2 flex items-center justify-between text-xs text-[#087443] font-medium">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-[#16A36A] flex-shrink-0" />
+            <span>✓ Information extracted successfully. Please verify and edit values if needed.</span>
+          </div>
+          {isScanning && (
+            <span className="text-[11px] font-semibold text-[#2563EB] animate-pulse">
+              Active Optical Scan in Progress…
+            </span>
+          )}
         </div>
       )}
 
@@ -164,6 +196,21 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Section 9.1: Scan trigger button */}
+              <button
+                type="button"
+                onClick={triggerScan}
+                disabled={isScanning}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold border transition-all cursor-pointer ${
+                  isScanning
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                    : 'bg-white hover:bg-blue-50 text-[#2563EB] border-blue-200 shadow-2xs'
+                }`}
+              >
+                <Scan className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+                <span>{isScanning ? 'Scanning…' : 'Simulate Scan'}</span>
+              </button>
+
               {/* Zoom controls */}
               <div className="flex items-center border border-slate-300 rounded bg-white overflow-hidden">
                 <button
@@ -215,13 +262,20 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
           {/* Interactive Document Sheet Canvas Simulation */}
           <div className="my-4 flex-1 flex items-center justify-center overflow-auto p-2">
             <div
-              className="relative bg-white border border-slate-300 rounded-sm shadow-md transition-all duration-200 select-none p-6"
+              className="relative bg-white border border-slate-300 rounded-sm shadow-md transition-all duration-200 select-none p-6 overflow-hidden"
               style={{
                 width: `${340 * (zoomLevel / 100)}px`,
                 minHeight: `${480 * (zoomLevel / 100)}px`,
                 fontFamily: 'Courier New, monospace',
               }}
             >
+              {/* Section 9.1: OCR Scan Line Animation (top -> bottom, easeInOut) */}
+              {isScanning && (
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-x-0 h-1 bg-[#2563EB] shadow-[0_0_12px_#2563EB,0_0_6px_#38BDF8] z-30 pointer-events-none animate-ocr-scan"
+                />
+              )}
               {/* Document Header Representation */}
               <div className="border-b-2 border-slate-900 pb-2 mb-4 text-center">
                 <div className="text-[11px] font-bold tracking-widest text-slate-900 uppercase">

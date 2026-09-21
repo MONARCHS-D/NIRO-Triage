@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840" fill="#FFFFFF">
+  <!-- Document paper shadow and base -->
+  <rect width="600" height="840" fill="#FFFFFF" rx="4" />
+  
+  <!-- Header Bar -->
+  <rect x="30" y="30" width="540" height="80" fill="#F8FAFC" rx="4" stroke="#E2E8F0" stroke-width="1" />
+  <text x="50" y="62" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" fill="#102033">DISTRICT HEALTH LABORATORY &amp; DIAGNOSTICS</text>
+  <text x="50" y="82" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#64748B">Community Health Centre · Balasore District, Odisha · NABL Accredited (Synthetic)</text>
+  <text x="50" y="96" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="600" fill="#2563EB">LAB REF: DHL-2026-98124 · SYNTHETIC PATIENT TEST PANEL</text>
+
+  <!-- Patient Demographics Section -->
+  <rect x="30" y="125" width="540" height="95" fill="#FFFFFF" rx="4" stroke="#E2E8F0" stroke-width="1" />
+  <text x="45" y="148" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#475569">PATIENT NAME:</text>
+  <text x="145" y="148" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#0F172A">Kamala Barik</text>
+  <text x="320" y="148" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#475569">AGE / GENDER:</text>
+  <text x="420" y="148" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#0F172A">38 Y / FEMALE</text>
+
+  <text x="45" y="172" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#475569">PATIENT ID:</text>
+  <text x="145" y="172" font-family="Courier, monospace" font-size="12" font-weight="700" fill="#2563EB">P-4091 (SYN-849)</text>
+  <text x="320" y="172" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#475569">COLLECTION DATE:</text>
+  <text x="445" y="172" font-family="system-ui, sans-serif" font-size="11" fill="#0F172A">17-Sep-2026 08:30 IST</text>
+
+  <text x="45" y="196" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#475569">REFERRED BY:</text>
+  <text x="145" y="196" font-family="system-ui, sans-serif" font-size="11" fill="#0F172A">Dr. A. Sharma, MO I/C</text>
+  <text x="320" y="196" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#475569">REPORT STATUS:</text>
+  <text x="420" y="196" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#087443">VERIFIED &amp; RELEASED</text>
+
+  <!-- Title of Investigation -->
+  <rect x="30" y="235" width="540" height="28" fill="#F1F5F9" />
+  <text x="45" y="254" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#1E293B">COMPLETE BLOOD COUNT (CBC) &amp; INFLAMMATORY MARKERS</text>
+
+  <!-- Table Header -->
+  <line x1="30" y1="280" x2="570" y2="280" stroke="#0F172A" stroke-width="1.5" />
+  <text x="45" y="295" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#334155">TEST PARAMETER</text>
+  <text x="250" y="295" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#334155">OBSERVED VALUE</text>
+  <text x="380" y="295" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#334155">BIOLOGICAL REF</text>
+  <text x="500" y="295" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#334155">UNIT</text>
+  <line x1="30" y1="305" x2="570" y2="305" stroke="#CBD5E1" stroke-width="1" />
+
+  <!-- Test Rows -->
+  <!-- Row 1: Hemoglobin (Low) -->
+  <rect x="30" y="315" width="540" height="30" fill="#FEF2F2" opacity="0.6" />
+  <text x="45" y="335" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#1E293B">Hemoglobin (Hb)</text>
+  <text x="250" y="335" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#DC2626">9.4 * (LOW)</text>
+  <text x="380" y="335" font-family="system-ui, sans-serif" font-size="11" fill="#475569">12.0 - 15.5</text>
+  <text x="500" y="335" font-family="system-ui, sans-serif" font-size="11" fill="#64748B">g/dL</text>
+  <line x1="30" y1="350" x2="570" y2="350" stroke="#F1F5F9" stroke-width="1" />
+
+  <!-- Row 2: Total Leukocyte Count (High) -->
+  <rect x="30" y="355" width="540" height="30" fill="#FEF2F2" opacity="0.6" />
+  <text x="45" y="375" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#1E293B">Total Leukocyte Count (WBC)</text>
+  <text x="250" y="375" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#DC2626">13,800 * (HIGH)</text>
+  <text x="380" y="375" font-family="system-ui, sans-serif" font-size="11" fill="#475569">4,000 - 11,000</text>
+  <text x="500" y="375" font-family="system-ui, sans-serif" font-size="11" fill="#64748B">/cumm</text>
+  <line x1="30" y1="390" x2="570" y2="390" stroke="#F1F5F9" stroke-width="1" />
+
+  <!-- Row 3: Platelet Count -->
+  <text x="45" y="415" font-family="system-ui, sans-serif" font-size="11" font-weight="500" fill="#1E293B">Platelet Count</text>
+  <text x="250" y="415" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#0F172A">2.45</text>
+  <text x="380" y="415" font-family="system-ui, sans-serif" font-size="11" fill="#475569">1.50 - 4.50</text>
+  <text x="500" y="415" font-family="system-ui, sans-serif" font-size="11" fill="#64748B">Lakh/cumm</text>
+  <line x1="30" y1="430" x2="570" y2="430" stroke="#F1F5F9" stroke-width="1" />
+
+  <!-- Row 4: ESR (High) -->
+  <rect x="30" y="435" width="540" height="30" fill="#FFFBEB" opacity="0.6" />
+  <text x="45" y="455" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#1E293B">Erythrocyte Sedimentation Rate (ESR)</text>
+  <text x="250" y="455" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#D97706">42 * (ELEVATED)</text>
+  <text x="380" y="455" font-family="system-ui, sans-serif" font-size="11" fill="#475569">0 - 20</text>
+  <text x="500" y="455" font-family="system-ui, sans-serif" font-size="11" fill="#64748B">mm/1st hr</text>
+  <line x1="30" y1="470" x2="570" y2="470" stroke="#F1F5F9" stroke-width="1" />
+
+  <!-- Row 5: C-Reactive Protein (CRP) -->
+  <rect x="30" y="475" width="540" height="30" fill="#FEF2F2" opacity="0.6" />
+  <text x="45" y="495" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#1E293B">C-Reactive Protein (Quantitative)</text>
+  <text x="250" y="495" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#DC2626">24.6 * (POSITIVE)</text>
+  <text x="380" y="495" font-family="system-ui, sans-serif" font-size="11" fill="#475569">&lt; 6.0</text>
+  <text x="500" y="495" font-family="system-ui, sans-serif" font-size="11" fill="#64748B">mg/L</text>
+  <line x1="30" y1="510" x2="570" y2="510" stroke="#F1F5F9" stroke-width="1" />
+
+  <!-- Row 6: Random Blood Sugar -->
+  <text x="45" y="535" font-family="system-ui, sans-serif" font-size="11" font-weight="500" fill="#1E293B">Random Blood Sugar (RBS)</text>
+  <text x="250" y="535" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#0F172A">114</text>
+  <text x="380" y="535" font-family="system-ui, sans-serif" font-size="11" fill="#475569">70 - 140</text>
+  <text x="500" y="535" font-family="system-ui, sans-serif" font-size="11" fill="#64748B">mg/dL</text>
+  <line x1="30" y1="550" x2="570" y2="550" stroke="#CBD5E1" stroke-width="1.5" />
+
+  <!-- Clinical Interpretation Notes -->
+  <rect x="30" y="570" width="540" height="110" fill="#F8FAFC" rx="4" stroke="#E2E8F0" stroke-width="1" />
+  <text x="45" y="594" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#1E293B">CLINICAL REMARKS / PATHOLOGY NOTE:</text>
+  <text x="45" y="616" font-family="system-ui, sans-serif" font-size="10.5" fill="#334155">• Mild microcytic hypochromic anemia (Hb 9.4 g/dL).</text>
+  <text x="45" y="634" font-family="system-ui, sans-serif" font-size="10.5" fill="#334155">• Leukocytosis with elevated acute phase reactants (CRP 24.6 mg/L, ESR 42 mm/hr), suggestive of active inflammation.</text>
+  <text x="45" y="652" font-family="system-ui, sans-serif" font-size="10" font-style="italic" fill="#64748B">Note: Prototype synthetic clinical record for triage-support review only. Please correlate clinically.</text>
+
+  <!-- Signatures and QR Footer -->
+  <line x1="45" y1="740" x2="200" y2="740" stroke="#94A3B8" stroke-width="1" />
+  <text x="45" y="756" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#1E293B">Dr. P. Mohanty, MD (Path)</text>
+  <text x="45" y="770" font-family="system-ui, sans-serif" font-size="9" fill="#64748B">Consultant Pathologist · Reg No. 34891</text>
+
+  <line x1="400" y1="740" x2="555" y2="740" stroke="#94A3B8" stroke-width="1" />
+  <text x="400" y="756" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#1E293B">Lab Technologist: R. Jena</text>
+  <text x="400" y="770" font-family="system-ui, sans-serif" font-size="9" fill="#64748B">Verified at 17-Sep-2026 10:15 IST</text>
+  
+  <text x="30" y="810" font-family="system-ui, sans-serif" font-size="9" fill="#94A3B8">Page 1 of 1 · End of Diagnostic Laboratory Report · SwasthyaSetu / NIRO Triage Synthetic Data Standard</text>
+</svg>
