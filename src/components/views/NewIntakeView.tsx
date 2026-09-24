@@ -8,6 +8,7 @@ import { ReportExtractStudio } from '../intake/ReportExtractStudio';
 import { ConsentModal } from '../common/ConsentModal';
 import { useTriage } from '../../context/TriageContext';
 import { Patient, Symptom, ExtractedFact } from '../../types/triage';
+import { uploadCaseFile } from '../../lib/api/fileUploadService';
 import {
   Mic,
   Keyboard,
@@ -154,6 +155,13 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
     };
 
     addPatient(newPatient);
+
+    // Asynchronously dispatch media file upload if audio intake was used
+    if (capturedVoiceData?.transcript) {
+      const voiceBlob = new Blob([capturedVoiceData.transcript], { type: 'text/plain' });
+      uploadCaseFile(newId, voiceBlob, 'AUDIO_VOICE', capturedVoiceData.transcript).catch(() => {});
+    }
+
     onIntakeCompleted(newId);
   };
 

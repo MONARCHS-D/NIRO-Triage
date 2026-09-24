@@ -40,4 +40,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /niro_mobile
-/triage_mitra-backend
+/triage_mitra-backend-main

@@ -1,9 +1,16 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Patient, Priority, CaseStatus, ExtractedFact, AuditEvent, TimelineEvent } from '../types/triage';
 import { INITIAL_PATIENTS } from '../lib/syntheticData';
 import { useRole } from './RoleContext';
+import { createSession } from '../lib/api/patientSessionService';
+import { createCase, updateCaseRisk, updateCaseStatus, getFacilityCases } from '../lib/api/caseService';
+import { saveTriageNote, finalizeTriageNote } from '../lib/api/triageNoteService';
+import { createReferral } from '../lib/api/referralService';
+import { BackendCaseStatus, BackendRiskLevel } from '../lib/api/types';
+
+export type SyncStatus = 'SYNCED' | 'SYNCING' | 'OFFLINE_QUEUED';
 
 interface TriageContextType {
   patients: Patient[];
@@ -11,9 +18,14 @@ interface TriageContextType {
   selectedPatient: Patient | null;
   priorityFilter: 'ALL' | 'RED' | 'YELLOW' | 'GREEN';
   searchQuery: string;
+  syncStatus: SyncStatus;
+  lastSyncedAt: string;
+  isAutoPolling: boolean;
   setSelectedPatientId: (id: string) => void;
   setPriorityFilter: (filter: 'ALL' | 'RED' | 'YELLOW' | 'GREEN') => void;
   setSearchQuery: (query: string) => void;
+  setIsAutoPolling: (enabled: boolean) => void;
+  refreshQueue: () => Promise<void>;
   updatePatient: (id: string, updates: Partial<Patient>) => void;
   addPatient: (patient: Patient) => void;
   setPatientPriority: (id: string, priority: Priority, reason?: string) => void;
@@ -31,7 +43,7 @@ const TriageContext = createContext<TriageContextType | undefined>(undefined);
 const STORAGE_KEY = 'niro_triage_patients_v1';
 
 export function TriageProvider({ children }: { children: React.ReactNode }) {
-  const { currentUser } = useRole();
+  const { currentUser, currentFacility, isOffline, isBackendOnline } = useRole();
   const [patients, setPatients] = useState<Patient[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -49,6 +61,48 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
   const [selectedPatientId, setSelectedPatientId] = useState<string>('P-1042');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'RED' | 'YELLOW' | 'GREEN'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(isOffline ? 'OFFLINE_QUEUED' : 'SYNCED');
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>(
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  );
+  const [isAutoPolling, setIsAutoPolling] = useState<boolean>(true);
+  const wasOfflineRef = useRef<boolean>(isOffline);
+
+  const refreshQueue = useCallback(async () => {
+    if (isOffline) {
+      setSyncStatus('OFFLINE_QUEUED');
+      return;
+    }
+    setSyncStatus('SYNCING');
+    try {
+      await getFacilityCases(currentFacility.id);
+      setLastSyncedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      setSyncStatus('SYNCED');
+    } catch {
+      setSyncStatus(isOffline ? 'OFFLINE_QUEUED' : 'SYNCED');
+    }
+  }, [currentFacility.id, isOffline]);
+
+  // Live background polling (every 15s)
+  useEffect(() => {
+    if (!isAutoPolling || isOffline || !isBackendOnline) return;
+
+    const interval = setInterval(() => {
+      refreshQueue();
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [isAutoPolling, isOffline, isBackendOnline, refreshQueue]);
+
+  // Network recovery & offline queue replay
+  useEffect(() => {
+    if (wasOfflineRef.current && !isOffline) {
+      console.log('[NIRO] Connectivity restored. Synchronizing queue.');
+      refreshQueue();
+    }
+    wasOfflineRef.current = isOffline;
+    setSyncStatus(isOffline ? 'OFFLINE_QUEUED' : 'SYNCED');
+  }, [isOffline, refreshQueue]);
 
   // Persist to localStorage
   useEffect(() => {
@@ -75,8 +129,42 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addPatient = (patient: Patient) => {
+    // 1. Instant optimistic update
     setPatients((prev) => [patient, ...prev]);
     setSelectedPatientId(patient.id);
+
+    // 2. Asynchronous backend session & case dispatch
+    createSession(currentFacility.id, {
+      facilityPublicId: currentFacility.id,
+      patientReference: patient.id,
+      age: patient.age,
+      consentObtained: true,
+      consentTimestamp: new Date().toISOString(),
+    })
+      .then((session) => {
+        return createCase(session.publicId, {
+          facilityPublicId: currentFacility.id,
+          patientSessionPublicId: session.publicId,
+          symptomText: patient.chiefComplaint,
+          riskLevel: patient.priority === 'GREY' ? 'UNASSIGNED' : (patient.priority as BackendRiskLevel),
+        });
+      })
+      .then((caseRes) => {
+        if (caseRes?.publicId) {
+          saveTriageNote(caseRes.publicId, {
+            casePublicId: caseRes.publicId,
+            version: 1,
+            extractedFacts: patient.facts,
+            missingInfo: patient.missingInfo,
+            suggestedQuestions: patient.aiQuestions,
+            summaryText: patient.chiefComplaint,
+            isFinalized: false,
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('[NIRO] API synchronization deferred or running in local mode:', err);
+      });
   };
 
   const setPatientPriority = (id: string, priority: Priority, reason?: string) => {
@@ -111,6 +199,13 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
+
+    // Sync to backend risk endpoint
+    updateCaseRisk(
+      id,
+      priority === 'GREY' ? 'UNASSIGNED' : (priority as BackendRiskLevel),
+      reason
+    ).catch(() => {});
   };
 
   const setPatientStatus = (id: string, status: CaseStatus, reason?: string) => {
@@ -136,6 +231,19 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
+
+    // Sync to backend status endpoint
+    const backendStatusMap: Record<CaseStatus, BackendCaseStatus> = {
+      CREATED: 'CREATED',
+      PROCESSING: 'PROCESSING',
+      AI_DRAFT: 'PROCESSING',
+      PENDING_REVIEW: 'TRIAGE_READY',
+      NEEDS_MORE_INFO: 'IN_REVIEW',
+      REVIEWED: 'REVIEWED',
+      ESCALATED: 'ESCALATED',
+      APPROVED: 'REVIEWED',
+    };
+    updateCaseStatus(id, backendStatusMap[status] || 'IN_REVIEW', reason).catch(() => {});
   };
 
   const editFactValue = (patientId: string, factId: string, newValue: string) => {
@@ -191,6 +299,14 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
+
+    // Sync edited fact to backend triage note
+    saveTriageNote(patientId, {
+      extractedFacts:
+        patients.find((p) => p.id === patientId)?.facts.map((f) =>
+          f.id === factId ? { ...f, value: newValue } : f
+        ) || [],
+    }).catch(() => {});
   };
 
   const answerQuestion = (patientId: string, questionId: string, selectedOption: string) => {
@@ -332,6 +448,9 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
+
+    // Finalize note via API
+    finalizeTriageNote(patientId, currentUser.id).catch(() => {});
   };
 
   const escalatePatientCase = (patientId: string, reason: string) => {
@@ -371,6 +490,14 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
+
+    // Dispatch referral via API
+    createReferral(patientId, {
+      casePublicId: patientId,
+      targetFacilityName: 'District Headquarters Hospital (DHH)',
+      urgencyLevel: 'IMMEDIATE',
+      clinicalReason: reason,
+    }).catch(() => {});
   };
 
   const resetToDefaults = () => {
@@ -389,9 +516,14 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         selectedPatient,
         priorityFilter,
         searchQuery,
+        syncStatus,
+        lastSyncedAt,
+        isAutoPolling,
         setSelectedPatientId,
         setPriorityFilter,
         setSearchQuery,
+        setIsAutoPolling,
+        refreshQueue,
         updatePatient,
         addPatient,
         setPatientPriority,

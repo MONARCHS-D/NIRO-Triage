@@ -18,6 +18,10 @@ import {
   User,
   SlidersHorizontal,
   FileSpreadsheet,
+  RefreshCw,
+  Building2,
+  CheckCircle2,
+  WifiOff,
 } from 'lucide-react';
 import { Priority } from '../../types/triage';
 import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
@@ -33,9 +37,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenPatient,
   onNewIntake,
 }) => {
-  const { patients, priorityFilter, setPriorityFilter, searchQuery, setSearchQuery } = useTriage();
-  const { currentUser, currentFacility } = useRole();
+  const {
+    patients,
+    priorityFilter,
+    setPriorityFilter,
+    searchQuery,
+    setSearchQuery,
+    syncStatus,
+    lastSyncedAt,
+    refreshQueue,
+  } = useTriage();
+  const { currentUser, currentFacility, isOffline } = useRole();
   const [showSkeleton, setShowSkeleton] = useState(false);
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsManualRefreshing(true);
+    await refreshQueue();
+    setTimeout(() => setIsManualRefreshing(false), 500);
+  };
 
   // Compute stats
   const totalPatients = patients.length + 45; // 48 total today
@@ -65,22 +85,65 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Header section (Section 6) */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#102033] tracking-tight">
-            Good morning, {currentUser.name}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-[#102033] tracking-tight">
+              Good morning, {currentUser.name}
+            </h1>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+              {currentFacility.code}
+            </span>
+          </div>
           <p className="text-xs sm:text-sm text-[#526276] mt-0.5">
-            Here&apos;s what&apos;s happening at <span className="font-semibold text-[#25364A]">{currentFacility.name}</span> today.
+            Active workstation at <span className="font-semibold text-[#25364A]">{currentFacility.name}</span> ({currentFacility.type} · {currentFacility.district})
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {/* Live Sync Status Badge */}
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium shadow-2xs ${
+              syncStatus === 'OFFLINE_QUEUED' || isOffline
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : syncStatus === 'SYNCING' || isManualRefreshing
+                ? 'bg-blue-50 border-blue-200 text-blue-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}
+          >
+            {syncStatus === 'OFFLINE_QUEUED' || isOffline ? (
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                <span>Offline Draft Queue</span>
+              </>
+            ) : syncStatus === 'SYNCING' || isManualRefreshing ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                <span>Syncing Live Queue…</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Synced ({lastSyncedAt})</span>
+              </>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            disabled={isManualRefreshing}
+            title="Refresh patient queue from backend"
+            className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-blue-600 transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isManualRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+          </button>
+
           <Button
             variant="secondary"
             size="md"
             onClick={() => setShowSkeleton(!showSkeleton)}
-            className="text-xs"
+            className="text-xs hidden md:inline-flex"
           >
-            {showSkeleton ? 'Hide Skeleton' : 'Toggle Skeleton Loader'}
+            {showSkeleton ? 'Hide Skeleton' : 'Skeleton'}
           </Button>
 
           <Button

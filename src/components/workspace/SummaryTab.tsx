@@ -20,9 +20,17 @@ import {
   Heart,
   Thermometer,
   Wind,
+  Share2,
+  Building2,
+  Printer,
 } from 'lucide-react';
 import { useTriage } from '../../context/TriageContext';
+import { useRole } from '../../context/RoleContext';
 import { AiOrganizationIllustration } from '../illustrations/AiOrganizationIllustration';
+import { createReferral } from '../../lib/api/referralService';
+import { recordAuditLog } from '../../lib/api/auditLogService';
+import { BackendReferralUrgency, ReferralResponse } from '../../lib/api/types';
+import { ReferralSlipModal } from './ReferralSlipModal';
 
 interface SummaryTabProps {
   patient: Patient;
@@ -31,8 +39,18 @@ interface SummaryTabProps {
 
 export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab }) => {
   const { setPatientPriority, approvePatientNote, escalatePatientCase } = useTriage();
+  const { currentFacility, currentUser } = useRole();
   const [approvalNotes, setApprovalNotes] = useState('');
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
+  const [showReferralDialog, setShowReferralDialog] = useState(false);
+  const [referralTarget, setReferralTarget] = useState('District Referral Hospital, Mayurbhanj');
+  const [referralUrgency, setReferralUrgency] = useState<BackendReferralUrgency>('PRIORITY');
+  const [referralReason, setReferralReason] = useState(
+    'Specialized pulmonology evaluation and continuous high-flow oxygen monitoring required.'
+  );
+  const [isSubmittingReferral, setIsSubmittingReferral] = useState(false);
+  const [createdReferral, setCreatedReferral] = useState<ReferralResponse | null>(null);
+  const [showSlipModal, setShowSlipModal] = useState(false);
   const [isEditingSummary, setIsEditingSummary] = useState(false);
   const [summaryText, setSummaryText] = useState(
     `Patient presents with a 3-day history of high fever and productive cough, with acute exacerbation of shortness of breath over the past 24 hours. Laboratory findings demonstrate significant leukocytosis (13,800/µL) consistent with acute systemic infection, while hemoglobin is mildly subnormal (11.2 g/dL). Borderline hypoxemic reading (91%) warrants immediate clinical airway and auscultatory evaluation.`
@@ -42,7 +60,48 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
 
   const handleApprove = () => {
     approvePatientNote(patient.id, approvalNotes);
+    recordAuditLog({
+      actorUserId: currentUser.id,
+      actorRole: currentUser.role,
+      action: 'APPROVE_NOTE',
+      resourceType: 'CASE_NOTE',
+      resourceId: patient.id,
+      facilityId: currentFacility.id,
+      details: { notes: approvalNotes },
+    });
     setShowApprovalDialog(false);
+  };
+
+  const handleReferralSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingReferral(true);
+
+    try {
+      const res = await createReferral(patient.id, {
+        casePublicId: patient.id,
+        targetFacilityName: referralTarget,
+        urgencyLevel: referralUrgency,
+        clinicalReason: referralReason,
+      });
+
+      await recordAuditLog({
+        actorUserId: currentUser.id,
+        actorRole: currentUser.role,
+        action: 'CREATE_REFERRAL',
+        resourceType: 'REFERRAL',
+        resourceId: res.publicId,
+        facilityId: currentFacility.id,
+        details: { target: referralTarget, urgency: referralUrgency },
+      });
+
+      setCreatedReferral(res);
+      setShowReferralDialog(false);
+      setShowSlipModal(true);
+    } catch (err) {
+      console.warn('[NIRO] Referral fallback handling', err);
+    } finally {
+      setIsSubmittingReferral(false);
+    }
   };
 
   return (
@@ -353,21 +412,21 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
               </span>
             </div>
 
-            {/* Action Buttons: [Mark as Low] [Mark as Medium] [Escalate] [Approve & Send to Queue] */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {/* Action Buttons: [Mark as Low] [Mark as Medium] [Escalate] [Refer] [Approve] */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               <Button
                 variant="secondary"
                 size="md"
                 onClick={() => setPatientPriority(patient.id, 'GREEN', 'Marked Routine by Reviewer')}
               >
-                Mark as Low
+                Mark Low
               </Button>
               <Button
                 variant="secondary"
                 size="md"
                 onClick={() => setPatientPriority(patient.id, 'YELLOW', 'Marked Medium by Reviewer')}
               >
-                Mark as Medium
+                Mark Med
               </Button>
               <Button
                 variant="outline-destructive"
@@ -377,21 +436,46 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
                 Escalate
               </Button>
               <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setShowReferralDialog(true)}
+                icon={<Building2 className="w-3.5 h-3.5 text-blue-600" />}
+              >
+                Refer
+              </Button>
+              <Button
                 variant="primary"
                 size="md"
                 onClick={() => setShowApprovalDialog(true)}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
-                Approve Note
+                Approve
               </Button>
             </div>
 
+            {/* Approved / Referred Feedback Notice */}
             {patient.status === 'APPROVED' && (
               <div className="mt-3 p-2.5 rounded bg-emerald-50 border border-emerald-200 text-xs text-[#087443] flex items-center justify-between">
                 <span className="font-semibold flex items-center gap-1.5">
-                  <CheckCircle className="w-4 h-4" /> Case Approved & Dispatched to OPD Consultation Queue
+                  <CheckCircle className="w-4 h-4" /> Case Approved &amp; Dispatched to OPD Consultation Queue
                 </span>
-                <span className="text-[11px]">Reviewer: {patient.assignedReviewer || 'Dr. A. Sharma'}</span>
+                <span className="text-[11px]">Reviewer: {patient.assignedReviewer || currentUser.name}</span>
+              </div>
+            )}
+
+            {createdReferral && (
+              <div className="mt-3 p-2.5 rounded bg-blue-50 border border-blue-200 text-xs text-blue-900 flex items-center justify-between">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <Share2 className="w-4 h-4 text-blue-700" /> Referred to {createdReferral.targetFacilityName} ({createdReferral.urgencyLevel})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowSlipModal(true)}
+                  className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer"
+                >
+                  <Printer className="w-3 h-3" />
+                  <span>View Transfer Slip</span>
+                </button>
               </div>
             )}
           </div>
@@ -428,12 +512,113 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
                 Cancel
               </Button>
               <Button variant="primary" size="md" onClick={handleApprove}>
-                Approve & Send to Queue
+                Approve &amp; Send to Queue
               </Button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Inter-Facility Referral Modal */}
+      {showReferralDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 p-6 shadow-2xl animate-in fade-in zoom-in-95 space-y-4">
+            <div className="flex items-center gap-2.5 text-blue-700">
+              <Building2 className="w-6 h-6" />
+              <div>
+                <h3 className="text-base font-bold text-[#102033]">Inter-Facility Referral &amp; Transfer</h3>
+                <span className="text-[11px] text-slate-500">Initiate structured transfer to a specialized hospital</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleReferralSubmit} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Receiving Destination Facility <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={referralTarget}
+                  onChange={(e) => setReferralTarget(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
+                >
+                  <option value="District Referral Hospital, Mayurbhanj">District Referral Hospital, Mayurbhanj (Secondary Care)</option>
+                  <option value="SCB Medical College & Hospital, Cuttack">SCB Medical College &amp; Hospital, Cuttack (Tertiary Centre)</option>
+                  <option value="AIIMS Bhubaneswar - Emergency & Trauma">AIIMS Bhubaneswar - Emergency &amp; Trauma Centre</option>
+                  <option value="Community Health Centre (CHC) Advanced Unit">Community Health Centre (CHC) Advanced Unit</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Urgency Tier <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['IMMEDIATE', 'PRIORITY', 'ROUTINE'] as const).map((tier) => (
+                    <button
+                      key={tier}
+                      type="button"
+                      onClick={() => setReferralUrgency(tier)}
+                      className={`p-2 rounded-lg border text-center font-bold text-xs transition-all cursor-pointer ${
+                        referralUrgency === tier
+                          ? tier === 'IMMEDIATE'
+                            ? 'bg-red-600 text-white border-red-600'
+                            : tier === 'PRIORITY'
+                            ? 'bg-amber-500 text-white border-amber-500'
+                            : 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {tier}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Clinical Transfer Justification <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={referralReason}
+                  onChange={(e) => setReferralReason(e.target.value)}
+                  rows={3}
+                  required
+                  placeholder="State reason for referral, required specialized interventions, and current airway/vital stability status..."
+                  className="w-full p-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => setShowReferralDialog(false)}
+                  disabled={isSubmittingReferral}
+                >
+                  Cancel
+                </Button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingReferral}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  <span>{isSubmittingReferral ? 'Creating Referral…' : 'Generate & Authorize Transfer'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Printable Clinical Referral Slip Modal */}
+      <ReferralSlipModal
+        isOpen={showSlipModal}
+        onClose={() => setShowSlipModal(false)}
+        patient={patient}
+        referral={createdReferral}
+        facility={currentFacility}
+        authorizingDoctorName={currentUser.name}
+      />
     </div>
   );
 };

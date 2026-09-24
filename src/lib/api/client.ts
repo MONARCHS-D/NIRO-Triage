@@ -1,9 +1,16 @@
 import { ApiError, ApiResponse } from './types';
 
-const DEFAULT_BASE_URL = 'http://localhost:9090/api/v1/triagemitra';
+// Root host URL for the Spring Boot backend
+const DEFAULT_HOST_URL = 'http://localhost:9090';
 
-export const API_BASE_URL =
-  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_BASE_URL) || DEFAULT_BASE_URL;
+export const API_HOST_URL =
+  (typeof process !== 'undefined' &&
+    (process.env.NEXT_PUBLIC_API_HOST_URL || process.env.NEXT_PUBLIC_API_BASE_URL)) ||
+  DEFAULT_HOST_URL;
+
+// Base path for v1 and v2 services
+export const API_V1_BASE = `${API_HOST_URL.replace(/\/api\/(v1|v2)\/triagemitra\/?$/, '')}/api/v1/triagemitra`;
+export const API_V2_BASE = `${API_HOST_URL.replace(/\/api\/(v1|v2)\/triagemitra\/?$/, '')}/api/v2/triagemitra`;
 
 const ACCESS_TOKEN_KEY = 'niro_jwt_access_token';
 const REFRESH_TOKEN_KEY = 'niro_jwt_refresh_token';
@@ -34,7 +41,9 @@ export const tokenStorage = {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      if (refreshToken) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      }
     } catch {
       // ignore storage errors
     }
@@ -54,6 +63,32 @@ export const tokenStorage = {
 export interface FetchOptions extends RequestInit {
   requiresAuth?: boolean;
   timeoutMs?: number;
+  skipAuthRefresh?: boolean;
+}
+
+/**
+ * Normalize and construct target URL according to backend route versioning
+ */
+export function buildApiUrl(endpoint: string): string {
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
+  // If already prefixed with /api/v1/ or /api/v2/
+  if (cleanEndpoint.startsWith('/api/v1/') || cleanEndpoint.startsWith('/api/v2/')) {
+    const root = API_HOST_URL.replace(/\/api\/(v1|v2)\/triagemitra\/?$/, '');
+    return `${root}${cleanEndpoint}`;
+  }
+
+  // Version 2 Endpoints: Auth and Staff
+  if (cleanEndpoint.startsWith('/auth/') || cleanEndpoint.startsWith('/staff/')) {
+    return `${API_V2_BASE}${cleanEndpoint}`;
+  }
+
+  // Version 1 Endpoints: Onboarding, Facilities, Cases, Sessions
+  return `${API_V1_BASE}${cleanEndpoint}`;
 }
 
 /**
@@ -63,17 +98,27 @@ export async function apiRequest<T>(
   endpoint: string,
   options: FetchOptions = {}
 ): Promise<T> {
-  const { requiresAuth = false, timeoutMs = 12000, headers = {}, ...rest } = options;
+  const {
+    requiresAuth = false,
+    timeoutMs = 12000,
+    skipAuthRefresh = false,
+    headers = {},
+    credentials = 'include', // Includes HttpOnly refreshToken cookies
+    ...rest
+  } = options;
 
-  // Clean endpoint path
-  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = `${API_BASE_URL}${normalizedEndpoint}`;
+  const url = buildApiUrl(endpoint);
 
   const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
     ...(headers as Record<string, string>),
   };
+
+  // If body is FormData, let browser handle Content-Type boundary
+  if (options.body instanceof FormData) {
+    delete requestHeaders['Content-Type'];
+  }
 
   if (requiresAuth) {
     const token = tokenStorage.getAccessToken();
@@ -89,6 +134,7 @@ export async function apiRequest<T>(
   try {
     const response = await fetch(url, {
       ...rest,
+      credentials,
       headers: requestHeaders,
       signal: controller.signal,
     });
@@ -104,8 +150,28 @@ export async function apiRequest<T>(
     }
 
     if (!response.ok) {
+      // If 401 Unauthorized and not already refreshing, attempt token refresh
+      if (response.status === 401 && !skipAuthRefresh && !endpoint.includes('/auth/')) {
+        try {
+          const newTokens = await refreshSessionToken();
+          if (newTokens?.accessToken) {
+            // Retry the original request with the fresh token
+            return apiRequest<T>(endpoint, {
+              ...options,
+              skipAuthRefresh: true,
+            });
+          }
+        } catch {
+          // Refresh failed; clear local tokens
+          tokenStorage.clearTokens();
+        }
+      }
+
       const errorMessage =
-        (json && (typeof json.payload === 'string' ? json.payload : (json as unknown as { message?: string }).message)) ||
+        (json &&
+          (typeof json.payload === 'string'
+            ? json.payload
+            : (json as unknown as { message?: string }).message)) ||
         `HTTP ${response.status}: ${response.statusText}`;
 
       const error: ApiError = {
@@ -118,7 +184,7 @@ export async function apiRequest<T>(
       throw error;
     }
 
-    // In successful ApiResponse<T>, the data resides in .payload
+    // In successful ApiResponse<T>, data resides in .payload
     if (json && typeof json === 'object' && 'payload' in json) {
       return json.payload as T;
     }
@@ -137,7 +203,7 @@ export async function apiRequest<T>(
     if (err instanceof Error && err.name === 'AbortError') {
       const timeoutError: ApiError = {
         statusCode: 408,
-        message: `Request timed out after ${timeoutMs}ms while contacting backend at ${API_BASE_URL}`,
+        message: `Request timed out after ${timeoutMs}ms while contacting backend at ${url}`,
         serviceName: 'TriageMitra',
         timestamp: new Date().toISOString(),
       };
@@ -147,12 +213,37 @@ export async function apiRequest<T>(
     // Handle network / CORS errors
     const networkError: ApiError = {
       statusCode: 0,
-      message: `Unable to connect to backend at ${API_BASE_URL}. Ensure the Spring Boot service is running on port 9090.`,
+      message: `Unable to connect to backend at ${url}. Ensure the Spring Boot service is running on port 9090.`,
       serviceName: 'TriageMitra',
       timestamp: new Date().toISOString(),
       details: err instanceof Error ? err.message : String(err),
     };
     throw networkError;
+  }
+}
+
+/**
+ * Refresh JWT access token using Cookie or Refresh Token
+ */
+async function refreshSessionToken(): Promise<{ accessToken: string; refreshToken: string } | null> {
+  try {
+    const refreshToken = tokenStorage.getRefreshToken() || '';
+    const res = await apiRequest<{ accessToken: string; refreshToken: string }>(
+      '/auth/refresh',
+      {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+        skipAuthRefresh: true,
+        credentials: 'include',
+      }
+    );
+    if (res?.accessToken) {
+      tokenStorage.setTokens(res.accessToken, res.refreshToken || '');
+      return res;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -169,16 +260,16 @@ export async function checkBackendHealth(): Promise<{
   const timeoutId = setTimeout(() => controller.abort(), 2500);
 
   try {
-    // Attempt lightweight ping or OPTIONS request to base URL
-    const response = await fetch(API_BASE_URL, {
-      method: 'GET',
+    // Attempt lightweight ping to API v1 or root
+    const response = await fetch(`${API_HOST_URL}/api/v1/triagemitra/onboarding/facility-admin`, {
+      method: 'OPTIONS',
       signal: controller.signal,
+      credentials: 'include',
       headers: { Accept: 'application/json' },
     });
     clearTimeout(timeoutId);
     const latencyMs = Math.round(performance.now() - start);
 
-    // Any response from port 9090 (even 404 or 401) indicates the Spring Boot server is alive
     return {
       isOnline: response.status < 500,
       latencyMs,
@@ -193,3 +284,5 @@ export async function checkBackendHealth(): Promise<{
     };
   }
 }
+
+export const API_BASE_URL = API_V1_BASE;

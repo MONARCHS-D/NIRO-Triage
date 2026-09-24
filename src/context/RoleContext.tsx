@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Facility, UserProfile, UserRole } from '../types/roles';
 import { INITIAL_FACILITIES, INITIAL_USERS } from '../lib/syntheticData';
 import { checkBackendHealth, tokenStorage } from '../lib/api/client';
+import { loginWithApi, logoutWithApi } from '../lib/api/authService';
 
 interface RoleContextType {
   currentUser: UserProfile;
@@ -22,7 +23,7 @@ interface RoleContextType {
   setUserRole: (role: UserRole) => void;
   setViewMode: (mode: 'REVIEWER_DESKTOP' | 'PATIENT_MOBILE') => void;
   setIsOffline: (offline: boolean) => void;
-  login: (staffIdOrEmail: string, password?: string) => boolean;
+  login: (staffIdOrEmail: string, password?: string) => Promise<boolean>;
   logout: () => void;
   setIsSessionExpired: (expired: boolean) => void;
   saveAuthSession: (
@@ -174,11 +175,67 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = (staffIdOrEmail: string, password?: string): boolean => {
+  const login = async (staffIdOrEmail: string, password?: string): Promise<boolean> => {
     if (!staffIdOrEmail || staffIdOrEmail.trim().length === 0) {
       return false;
     }
 
+    // Attempt live API authentication with Spring Boot backend
+    try {
+      const authRes = await loginWithApi({
+        identifier: staffIdOrEmail.trim(),
+        password: password || 'demo123',
+      });
+
+      if (authRes && authRes.accessToken) {
+        setAccessToken(authRes.accessToken);
+        setIsAuthenticated(true);
+        setIsSessionExpired(false);
+
+        let userRole: UserRole = 'DOCTOR';
+        if (authRes.role === 'NURSE') userRole = 'NURSE';
+        else if (authRes.role === 'HEALTH_WORKER') userRole = 'HEALTH_WORKER';
+        else if (authRes.role === 'ADMIN') userRole = 'ADMIN';
+
+        const updatedUser: UserProfile = {
+          id: authRes.userPublicId || 'usr-active',
+          name: authRes.fullName || (staffIdOrEmail.includes('@') ? staffIdOrEmail.split('@')[0] : staffIdOrEmail),
+          role: userRole,
+          title:
+            userRole === 'DOCTOR'
+              ? 'Medical Officer'
+              : userRole === 'NURSE'
+              ? 'Staff Nurse'
+              : userRole === 'HEALTH_WORKER'
+              ? 'Community Health Officer'
+              : 'Facility Administrator',
+          facility: currentFacility.name,
+        };
+
+        setCurrentUser(updatedUser);
+        setUsers((prev) => [updatedUser, ...prev.filter((u) => u.id !== updatedUser.id)]);
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
+          localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+        }
+
+        if (viewMode === 'PATIENT_MOBILE') {
+          setViewMode('REVIEWER_DESKTOP');
+        }
+
+        return true;
+      }
+    } catch (error: unknown) {
+      const err = error as { statusCode?: number; message?: string };
+      // If backend responded with 400/401/403 (Invalid credentials or validation error), rethrow for UI display
+      if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+        throw error;
+      }
+      console.warn('[NIRO] API login failed, using prototype demo role.', error);
+    }
+
+    // Prototype / Demo fallback when offline
     const lower = staffIdOrEmail.toLowerCase();
     let targetRole: UserRole = 'DOCTOR';
     if (lower.includes('nurse') || lower.includes('sunita')) {
@@ -207,6 +264,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       localStorage.setItem(AUTH_STORAGE_KEY, 'false');
     }
+    logoutWithApi().catch((e) => console.warn('[NIRO] Backend logout call handled.', e));
   };
 
   return (

@@ -1,0 +1,57 @@
+{
+  "testSuite": "NIRO Triage E2E & Clinical Workflows",
+  "version": "2.0.0",
+  "targetEnvironment": "Hosted Backend Testing (No Mocks)",
+  "baseUrl": "http://localhost:3000",
+  "backendApiBaseUrl": "http://localhost:9090/api/v1/triagemitra",
+  "hostedBackendApiUrl": "https://api.triage.example.gov.in/api/v1/triagemitra",
+  "timeouts": {
+    "pageLoadMs": 15000,
+    "actionTimeoutMs": 8000,
+    "apiResponseTimeoutMs": 12000,
+    "pollIntervalMs": 1000
+  },
+  "roles": {
+    "ADMIN": {
+      "title": "Facility Administrator",
+      "defaultStaffId": "admin@baripada.health.gov.in",
+      "allowedActions": ["ONBOARD_FACILITY", "INVITE_STAFF", "VIEW_AUDIT", "CONFIGURE_SYSTEM"]
+    },
+    "DOCTOR": {
+      "title": "Medical Officer (Physician)",
+      "defaultStaffId": "dr.sharma@health.gov.in",
+      "allowedActions": ["REVIEW_CASE", "SET_PRIORITY", "EDIT_FACTS", "SIGN_NOTE", "CREATE_REFERRAL"]
+    },
+    "NURSE": {
+      "title": "Staff Nurse (Triage Officer)",
+      "defaultStaffId": "sunita.nurse@health.gov.in",
+      "allowedActions": ["PERFORM_INTAKE", "RECORD_VITALS", "PRELIMINARY_TRIAGE", "RESOLVE_MISSING_INFO"]
+    },
+    "HEALTH_WORKER": {
+      "title": "Community Health Officer (CHO)",
+      "defaultStaffId": "ramesh.cho@health.gov.in",
+      "allowedActions": ["PERFORM_INTAKE", "VOICE_RECORDING", "UPLOAD_LAB_REPORT"]
+    }
+  },
+  "facilityTypes": [
+    "PHC",
+    "CHC",
+    "CLINIC",
+    "CAMP",
+    "DISTRICT_HOSPITAL"
+  ],
+  "routes": {
+    "login": "/auth/login",
+    "registerFacility": "/auth/register-facility",
+    "activateStaff": "/auth/activate",
+    "forgotPassword": "/auth/forgot-password",
+    "dashboard": "/dashboard",
+    "queue": "/queue",
+    "intake": "/intake",
+    "intakeVoice": "/intake/voice",
+    "intakeReport": "/intake/report",
+    "patientReview": "/patients/[id]",
+    "patientsList": "/patients",
+    "settings": "/settings"
+  }
+}

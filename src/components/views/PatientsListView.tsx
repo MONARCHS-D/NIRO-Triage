@@ -2,9 +2,19 @@
 
 import React, { useState } from 'react';
 import { useTriage } from '../../context/TriageContext';
+import { useRole } from '../../context/RoleContext';
 import { PriorityBadge, StatusBadge } from '../common/Badge';
 import { Button } from '../common/Button';
-import { Search, Filter, ArrowRight, PlusCircle, Users } from 'lucide-react';
+import {
+  Search,
+  Filter,
+  ArrowRight,
+  PlusCircle,
+  Users,
+  RefreshCw,
+  CheckCircle2,
+  WifiOff,
+} from 'lucide-react';
 import { Priority } from '../../types/triage';
 import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
 import { EmptyStateIllustration } from '../illustrations/EmptyStateIllustration';
@@ -18,9 +28,24 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   onOpenPatient,
   onNewIntake,
 }) => {
-  const { patients } = useTriage();
+  const {
+    patients,
+    syncStatus,
+    lastSyncedAt,
+    refreshQueue,
+    isAutoPolling,
+    setIsAutoPolling,
+  } = useTriage();
+  const { isOffline, currentFacility } = useRole();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<string>('ALL');
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsManualRefreshing(true);
+    await refreshQueue();
+    setTimeout(() => setIsManualRefreshing(false), 500);
+  };
 
   const filtered = patients.filter((p) => {
     if (selectedPriority !== 'ALL' && p.priority !== selectedPriority) return false;
@@ -40,14 +65,55 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
       <AppAmbientGrid opacity={0.03} position="top-right" />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#102033]">Patient Directory</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#102033]">Patient Directory &amp; Triage Queue</h1>
           <p className="text-xs sm:text-sm text-[#526276] mt-0.5">
-            Active registered cases across all community health wards and clinics
+            Active registered cases for <span className="font-semibold text-slate-800">{currentFacility.name}</span>
           </p>
         </div>
-        <Button variant="primary" size="md" onClick={onNewIntake} icon={<PlusCircle className="w-4 h-4" />}>
-          Start New Intake
-        </Button>
+
+        <div className="flex items-center gap-2.5">
+          {/* Sync status indicator */}
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${
+              syncStatus === 'OFFLINE_QUEUED' || isOffline
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : syncStatus === 'SYNCING' || isManualRefreshing
+                ? 'bg-blue-50 border-blue-200 text-blue-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}
+          >
+            {syncStatus === 'OFFLINE_QUEUED' || isOffline ? (
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                <span>Offline Queue</span>
+              </>
+            ) : syncStatus === 'SYNCING' || isManualRefreshing ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                <span>Refreshing…</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Synced ({lastSyncedAt})</span>
+              </>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            disabled={isManualRefreshing}
+            title="Refresh patient queue"
+            className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-blue-600 transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isManualRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+          </button>
+
+          <Button variant="primary" size="md" onClick={onNewIntake} icon={<PlusCircle className="w-4 h-4" />}>
+            Start New Intake
+          </Button>
+        </div>
       </div>
 
       {/* Filter Bar */}

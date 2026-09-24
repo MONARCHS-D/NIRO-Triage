@@ -1,0 +1,710 @@
+{
+  "testMatrixVersion": "2.0.0",
+  "generatedFor": "Browser Agent E2E & Clinical Verification",
+  "environment": "Live/Hosted Backend (No Mocks)",
+  "totalTestCases": 65,
+  "suites": [
+    {
+      "id": "SUITE-01",
+      "name": "Facility & Admin Onboarding",
+      "route": "/auth/register-facility",
+      "testCases": [
+        {
+          "id": "TC-ONB-001",
+          "title": "Happy path facility & admin onboarding",
+          "route": "/auth/register-facility",
+          "backendEndpoint": "POST /api/v1/triagemitra/onboarding/facility-admin",
+          "authRequired": false,
+          "steps": [
+            "Navigate to /auth/register-facility",
+            "Fill facilityName='CHC Baripada Regional Hub', facilityType='CHC', district='Mayurbhanj', state='Odisha'",
+            "Fill adminFullName='Dr. Pradeep Mohanty', adminPhoneNumber='+919876543210', adminEmail='admin.baripada@health.gov.in', adminPassword='AdminPass@2026'",
+            "Click button[type='submit'] ('Complete Facility Registration')",
+            "Wait for HTTP 201 response"
+          ],
+          "expected": [
+            "Success card renders with checkmark",
+            "Displays facility name, generated facility code (FAC-CHC-XXXX), and admin name",
+            "Captures facilityCode and facilityPublicId for subsequent tests"
+          ]
+        },
+        {
+          "id": "TC-ONB-002",
+          "title": "Validation: Missing required facility name",
+          "route": "/auth/register-facility",
+          "authRequired": false,
+          "steps": [
+            "Navigate to /auth/register-facility",
+            "Leave facilityName empty, fill other required fields",
+            "Click Complete Facility Registration"
+          ],
+          "expected": [
+            "Red error banner appears with message 'Facility Name is required.'",
+            "No network request dispatched"
+          ]
+        },
+        {
+          "id": "TC-ONB-003",
+          "title": "Validation: Invalid E.164 phone number formats",
+          "route": "/auth/register-facility",
+          "authRequired": false,
+          "steps": [
+            "Enter invalid phone formats: '98765', '+91-98765-43210', 'alphabetic'",
+            "Attempt submission"
+          ],
+          "expected": [
+            "Error alert appears requiring E.164 format: ^\\+?[1-9]\\d{9,14}$"
+          ]
+        },
+        {
+          "id": "TC-ONB-004",
+          "title": "Validation: Password shorter than 8 characters",
+          "route": "/auth/register-facility",
+          "authRequired": false,
+          "steps": [
+            "Fill all fields, set password to 'pass123' (7 characters)",
+            "Attempt submission"
+          ],
+          "expected": [
+            "Error alert appears: 'Admin password must be at least 8 characters long.'"
+          ]
+        },
+        {
+          "id": "TC-ONB-005",
+          "title": "Facility type selection coverage (PHC, CHC, CLINIC, CAMP, DISTRICT_HOSPITAL)",
+          "route": "/auth/register-facility",
+          "authRequired": false,
+          "steps": [
+            "Iterate through all 5 options in select[name='facilityType']",
+            "Verify DOM selection and network payload serialization"
+          ],
+          "expected": [
+            "All 5 types are accepted by form and serialized properly"
+          ]
+        },
+        {
+          "id": "TC-ONB-006",
+          "title": "Password mask visibility toggle",
+          "route": "/auth/register-facility",
+          "authRequired": false,
+          "steps": [
+            "Type password into input[name='adminPassword']",
+            "Click eye icon button to toggle to plaintext",
+            "Click eye icon again to toggle back to password mask"
+          ],
+          "expected": [
+            "Input type switches between 'password' and 'text'"
+          ]
+        },
+        {
+          "id": "TC-ONB-007",
+          "title": "Navigation: Return to Sign In screen",
+          "route": "/auth/register-facility",
+          "authRequired": false,
+          "steps": [
+            "Click back arrow link in header or 'Sign in to existing facility' footer link"
+          ],
+          "expected": [
+            "Browser navigates to /auth/login cleanly"
+          ]
+        },
+        {
+          "id": "TC-ONB-008",
+          "title": "One-click workstation launch from success card",
+          "route": "/auth/register-facility",
+          "authRequired": false,
+          "steps": [
+            "Complete TC-ONB-001 to reach success card",
+            "Click 'Launch Facility Workstation' button"
+          ],
+          "expected": [
+            "Redirects to /dashboard with active Admin session and newly registered facility selected"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SUITE-02",
+      "name": "Staff Invitations & RBAC",
+      "route": "/settings",
+      "testCases": [
+        {
+          "id": "TC-INV-001",
+          "title": "Invite Medical Officer (Doctor)",
+          "route": "/settings",
+          "backendEndpoint": "POST /api/v1/triagemitra/staff/invite",
+          "authRequired": true,
+          "role": "ADMIN",
+          "steps": [
+            "Navigate to /settings as Administrator",
+            "Enter Full Name: 'Dr. Ananya Ray', Email: 'dr.ananya.ray@health.gov.in', Phone: '+919876543220', Role: 'DOCTOR'",
+            "Click 'Send Invitation via API'"
+          ],
+          "expected": [
+            "HTTP request to /staff/invite with ADMIN bearer token",
+            "Success banner appears with clickable direct activation link",
+            "New row added to 'Pending & Invited Staff' list"
+          ]
+        },
+        {
+          "id": "TC-INV-002",
+          "title": "Invite Staff Nurse (Triage Officer)",
+          "route": "/settings",
+          "backendEndpoint": "POST /api/v1/triagemitra/staff/invite",
+          "authRequired": true,
+          "role": "ADMIN",
+          "steps": [
+            "Fill Name: 'Sunita Barik', Email: 'sunita.nurse@health.gov.in', Phone: '+919876543221', Role: 'NURSE'",
+            "Submit invitation"
+          ],
+          "expected": [
+            "Success confirmation displays",
+            "Staff list shows role NURSE with activation link"
+          ]
+        },
+        {
+          "id": "TC-INV-003",
+          "title": "Invite Community Health Officer (CHO)",
+          "route": "/settings",
+          "backendEndpoint": "POST /api/v1/triagemitra/staff/invite",
+          "authRequired": true,
+          "role": "ADMIN",
+          "steps": [
+            "Fill Name: 'Ramesh Chandra Patra', Email: 'ramesh.cho@health.gov.in', Phone: '+919876543222', Role: 'HEALTH_WORKER'",
+            "Submit invitation"
+          ],
+          "expected": [
+            "Staff list shows role HEALTH_WORKER with activation link"
+          ]
+        },
+        {
+          "id": "TC-INV-004",
+          "title": "Validation: Missing name or email in staff invite",
+          "route": "/settings",
+          "authRequired": true,
+          "steps": [
+            "Leave name empty and submit"
+          ],
+          "expected": [
+            "Error alert: 'Please provide both staff member name and official email address.'"
+          ]
+        },
+        {
+          "id": "TC-INV-005",
+          "title": "Pending staff list persistence across reload",
+          "route": "/settings",
+          "authRequired": true,
+          "steps": [
+            "Invite a staff member, then reload browser page"
+          ],
+          "expected": [
+            "Pending & Invited Staff list retains previously invited members"
+          ]
+        },
+        {
+          "id": "TC-INV-006",
+          "title": "RBAC demo role switcher updates",
+          "route": "/settings",
+          "authRequired": false,
+          "steps": [
+            "Click role buttons: Doctor, Nurse, Admin, CHO",
+            "Observe Topbar dropdown value"
+          ],
+          "expected": [
+            "Active user role updates instantly in Topbar and application context"
+          ]
+        },
+        {
+          "id": "TC-INV-007",
+          "title": "Backend API Connectivity Ping probe",
+          "route": "/settings",
+          "authRequired": false,
+          "steps": [
+            "Locate Backend API Connectivity card",
+            "Click 'Ping' button"
+          ],
+          "expected": [
+            "Ping icon animates and service status updates with live latency (ms)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SUITE-03",
+      "name": "Staff Account Activation",
+      "route": "/auth/activate",
+      "testCases": [
+        {
+          "id": "TC-ACT-001",
+          "title": "Happy path staff account activation via invite URL",
+          "route": "/auth/activate?token=...",
+          "backendEndpoint": "POST /api/v1/triagemitra/staff/activate",
+          "authRequired": false,
+          "steps": [
+            "Open activation URL from Suite 02",
+            "Verify token is prefilled in input",
+            "Enter OTP: '123456', Password: 'DoctorPass@2026', Confirm: 'DoctorPass@2026'",
+            "Click 'Activate Account & Proceed'"
+          ],
+          "expected": [
+            "HTTP 201 response with accessToken and refreshToken",
+            "Success screen displays 'Account Activated!'",
+            "Redirects to /dashboard and stores token in localStorage"
+          ]
+        },
+        {
+          "id": "TC-ACT-002",
+          "title": "Manual token entry without URL query parameter",
+          "route": "/auth/activate",
+          "authRequired": false,
+          "steps": [
+            "Navigate directly to /auth/activate",
+            "Type token, OTP, and matching passwords",
+            "Submit"
+          ],
+          "expected": [
+            "Activation proceeds normally"
+          ]
+        },
+        {
+          "id": "TC-ACT-003",
+          "title": "Validation: Missing or short OTP (< 4 digits)",
+          "route": "/auth/activate",
+          "authRequired": false,
+          "steps": [
+            "Enter token, enter OTP '12', enter passwords",
+            "Submit"
+          ],
+          "expected": [
+            "Alert displays: 'Please enter the one-time verification code (OTP).'"
+          ]
+        },
+        {
+          "id": "TC-ACT-004",
+          "title": "Validation: Password confirmation mismatch",
+          "route": "/auth/activate",
+          "authRequired": false,
+          "steps": [
+            "Enter password 'FirstPass@123' and confirm 'SecondPass@123'",
+            "Submit"
+          ],
+          "expected": [
+            "Alert displays: 'Passwords do not match. Please re-enter.'"
+          ]
+        },
+        {
+          "id": "TC-ACT-005",
+          "title": "Validation: Password shorter than 8 characters",
+          "route": "/auth/activate",
+          "authRequired": false,
+          "steps": [
+            "Enter password 'short' (5 chars)",
+            "Submit"
+          ],
+          "expected": [
+            "Alert displays: 'Password must be at least 8 characters long.'"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SUITE-04",
+      "name": "Authentication & Login",
+      "route": "/auth/login",
+      "testCases": [
+        {
+          "id": "TC-LOG-001",
+          "title": "Form login with staff email/password",
+          "route": "/auth/login",
+          "authRequired": false,
+          "steps": [
+            "Navigate to /auth/login",
+            "Enter email: 'dr.sharma@health.gov.in', password: 'DoctorPassword@123'",
+            "Click 'Sign in'"
+          ],
+          "expected": [
+            "Navigates to /dashboard with Doctor profile active"
+          ]
+        },
+        {
+          "id": "TC-LOG-002",
+          "title": "Quick demo provider logins (Doctor & Nurse)",
+          "route": "/auth/login",
+          "authRequired": false,
+          "steps": [
+            "Click 'Sign in as Sunita B. (Triage Nurse)' button"
+          ],
+          "expected": [
+            "Instant redirect to /dashboard with Nurse role"
+          ]
+        },
+        {
+          "id": "TC-LOG-003",
+          "title": "Validation: Empty credentials",
+          "route": "/auth/login",
+          "authRequired": false,
+          "steps": [
+            "Leave email and password empty, click 'Sign in'"
+          ],
+          "expected": [
+            "Alert displays: 'We couldn't sign you in. Check your staff ID and password and try again.'"
+          ]
+        },
+        {
+          "id": "TC-LOG-004",
+          "title": "Background scene toggle (CHC vs Network Hospital)",
+          "route": "/auth/login",
+          "authRequired": false,
+          "steps": [
+            "Click background toggle button in login header"
+          ],
+          "expected": [
+            "Background artwork transitions smoothly between clinic and hospital views"
+          ]
+        },
+        {
+          "id": "TC-LOG-005",
+          "title": "Links: Register Facility and Activate Staff Account",
+          "route": "/auth/login",
+          "authRequired": false,
+          "steps": [
+            "Click 'Register Facility' link",
+            "Verify route /auth/register-facility",
+            "Go back and click 'Activate Staff Account' link",
+            "Verify route /auth/activate"
+          ],
+          "expected": [
+            "Both links navigate to their respective pages cleanly"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SUITE-05",
+      "name": "Patient Intake & Multimodal Ingestion",
+      "route": "/intake",
+      "testCases": [
+        {
+          "id": "TC-INT-001",
+          "title": "Step 1: Demographics and clinical consent",
+          "route": "/intake",
+          "authRequired": true,
+          "steps": [
+            "Fill Patient Name: 'Bimala Naik', Age: '48', Gender: 'Female', Language: 'Odia'",
+            "Enter Chief Complaint: 'Fever for 4 days with dry cough'",
+            "Check consent box and click 'Continue to Ingestion Studio'"
+          ],
+          "expected": [
+            "Transitions smoothly to Step 2"
+          ]
+        },
+        {
+          "id": "TC-INT-002",
+          "title": "Consent modal inspection and agreement",
+          "route": "/intake",
+          "authRequired": true,
+          "steps": [
+            "Click 'Review Consent Terms & ABDM Privacy Safeguards'",
+            "Click 'I Agree & Provide Consent' inside modal"
+          ],
+          "expected": [
+            "Modal closes and consent checkbox on main form is checked"
+          ]
+        },
+        {
+          "id": "TC-INT-003",
+          "title": "Step 2A: Voice intake recording and transcript review",
+          "route": "/intake",
+          "authRequired": true,
+          "steps": [
+            "Select Voice Intake Studio, record for 3 seconds, click stop"
+          ],
+          "expected": [
+            "Waveform animates, transcript renders in original language and English toggle"
+          ]
+        },
+        {
+          "id": "TC-INT-004",
+          "title": "Step 2B: Lab report OCR extraction table",
+          "route": "/intake",
+          "authRequired": true,
+          "steps": [
+            "Select Lab Report OCR Studio, click 'Load Benchmark CBC Report'"
+          ],
+          "expected": [
+            "Document preview loads sample_report.svg and extracted facts table populates with confidence scores"
+          ]
+        },
+        {
+          "id": "TC-INT-005",
+          "title": "Step 3: Physiological vitals measurement entry",
+          "route": "/intake",
+          "authRequired": true,
+          "steps": [
+            "Enter BP: '135/88', Pulse: '92', Temp: '100.8', SpO2: '96', RR: '20'",
+            "Click 'Generate AI Triage Summary'"
+          ],
+          "expected": [
+            "Vitals validated, transitions to Step 4"
+          ]
+        },
+        {
+          "id": "TC-INT-006",
+          "title": "Step 4: AI triage synthesis and submission to queue",
+          "route": "/intake",
+          "authRequired": true,
+          "steps": [
+            "Review generated draft note and protocol cues",
+            "Click 'Submit to Clinical Review Queue'"
+          ],
+          "expected": [
+            "Case appended to queue, navigates to /queue with new patient visible"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SUITE-06",
+      "name": "Clinical Queue & Priority Filtering",
+      "route": "/queue",
+      "testCases": [
+        {
+          "id": "TC-QUE-001",
+          "title": "Queue table columns verification",
+          "route": "/queue",
+          "authRequired": true,
+          "steps": [
+            "Inspect column headers for Token, Demographics, Complaint, Risk Signs, Priority, Status, Actions"
+          ],
+          "expected": [
+            "All standard triage columns are visible"
+          ]
+        },
+        {
+          "id": "TC-QUE-002",
+          "title": "Filter by Priority: RED, YELLOW, GREEN, and ALL",
+          "route": "/queue",
+          "authRequired": true,
+          "steps": [
+            "Click 'Red (Urgent)' -> verify only RED cases visible",
+            "Click 'Yellow (Prompt)' -> verify only YELLOW cases visible",
+            "Click 'Green (Routine)' -> verify only GREEN cases visible",
+            "Click 'All' -> verify full queue restored"
+          ],
+          "expected": [
+            "Filtering updates instantly without page reload"
+          ]
+        },
+        {
+          "id": "TC-QUE-003",
+          "title": "Search patient by name or ID (P-1042)",
+          "route": "/queue",
+          "authRequired": true,
+          "steps": [
+            "Type 'P-1042' in search bar"
+          ],
+          "expected": [
+            "Exactly row P-1042 is displayed"
+          ]
+        },
+        {
+          "id": "TC-QUE-004",
+          "title": "Zero search results empty state artwork",
+          "route": "/queue",
+          "authRequired": true,
+          "steps": [
+            "Search 'NONEXISTENT999'"
+          ],
+          "expected": [
+            "Empty state illustration (empty_queue.png) renders with clear explanation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SUITE-07",
+      "name": "Clinical Case Review & Note Finalization",
+      "route": "/patients/[id]",
+      "testCases": [
+        {
+          "id": "TC-REV-001",
+          "title": "Clinical workspace header & vitals banner",
+          "route": "/patients/P-1042",
+          "authRequired": true,
+          "steps": [
+            "Open /patients/P-1042",
+            "Verify patient header displays vital signs and risk tags"
+          ],
+          "expected": [
+            "Vitals bar renders BP, Pulse, Temp, SpO2, RR accurately"
+          ]
+        },
+        {
+          "id": "TC-REV-002",
+          "title": "Edit clinical fact value and record audit entry",
+          "route": "/patients/P-1042",
+          "authRequired": true,
+          "steps": [
+            "Click Edit on Hemoglobin fact, change 11.2 to 11.8, save"
+          ],
+          "expected": [
+            "Fact displays 11.8 g/dL with 'Edited' badge",
+            "Audit trail logs EDIT_FACT with clinician name"
+          ]
+        },
+        {
+          "id": "TC-REV-003",
+          "title": "Answer AI protocol clarification question",
+          "route": "/patients/P-1042",
+          "authRequired": true,
+          "steps": [
+            "Click 'No Prior Asthma' option on AI question"
+          ],
+          "expected": [
+            "Option marked as selected, timestamp recorded"
+          ]
+        },
+        {
+          "id": "TC-REV-004",
+          "title": "Resolve missing information item",
+          "route": "/patients/P-1042",
+          "authRequired": true,
+          "steps": [
+            "Enter resolution in 'Last meal / fluid intake time' and save"
+          ],
+          "expected": [
+            "Item updates to OBTAINED state with green checkmark"
+          ]
+        },
+        {
+          "id": "TC-REV-005",
+          "title": "Physician priority reclassification (YELLOW to RED)",
+          "route": "/patients/P-1042",
+          "authRequired": true,
+          "role": "DOCTOR",
+          "steps": [
+            "Change priority dropdown from YELLOW to RED with rationale"
+          ],
+          "expected": [
+            "Priority badge updates to RED, audit entry recorded"
+          ]
+        },
+        {
+          "id": "TC-REV-006",
+          "title": "Physician triage note sign-off and finalization",
+          "route": "/patients/P-1042",
+          "authRequired": true,
+          "role": "DOCTOR",
+          "steps": [
+            "Click 'Approve & Finalize Triage Note', confirm in dialog"
+          ],
+          "expected": [
+            "Case status updates to REVIEWED / APPROVED, signoff timestamp locked"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SUITE-08",
+      "name": "Referral Disposition",
+      "route": "/patients/[id]",
+      "testCases": [
+        {
+          "id": "TC-REF-001",
+          "title": "Open referral modal and dispatch emergency transfer",
+          "route": "/patients/P-1042",
+          "backendEndpoint": "POST /referrals",
+          "authRequired": true,
+          "steps": [
+            "Click 'Refer to Higher Facility'",
+            "Enter Target: 'District Hospital Baripada', Urgency: 'IMMEDIATE', Rationale: 'Acute respiratory failure'",
+            "Click 'Confirm & Dispatch Referral'"
+          ],
+          "expected": [
+            "Referral dispatched, patient status updates to REFERRED, audit trail logged"
+          ]
+        },
+        {
+          "id": "TC-REF-002",
+          "title": "Validation: Missing clinical rationale",
+          "route": "/patients/P-1042",
+          "authRequired": true,
+          "steps": [
+            "Leave rationale empty and submit referral"
+          ],
+          "expected": [
+            "Submission blocked with validation alert"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SUITE-09",
+      "name": "Resilience & Boundary Values",
+      "route": "Global",
+      "testCases": [
+        {
+          "id": "TC-EDG-001",
+          "title": "Toggle offline mode simulation",
+          "route": "/dashboard",
+          "authRequired": false,
+          "steps": [
+            "Click Offline toggle in Topbar",
+            "Verify amber badge and local storage routing"
+          ],
+          "expected": [
+            "Offline state active without page reload"
+          ]
+        },
+        {
+          "id": "TC-EDG-002",
+          "title": "Prototype data reset",
+          "route": "/dashboard",
+          "authRequired": false,
+          "steps": [
+            "Click 'Reset Demo' in top disclaimer banner"
+          ],
+          "expected": [
+            "Restores all cases and facts to default benchmark state"
+          ]
+        },
+        {
+          "id": "TC-EDG-003",
+          "title": "Rapid double-click submission protection",
+          "route": "/auth/register-facility",
+          "authRequired": false,
+          "steps": [
+            "Rapidly click submit button multiple times"
+          ],
+          "expected": [
+            "Button disabled after first click, exactly one network call sent"
+          ]
+        },
+        {
+          "id": "TC-EDG-004",
+          "title": "Unicode and Indic script character support",
+          "route": "/intake",
+          "authRequired": true,
+          "steps": [
+            "Enter Odia script name: 'ବିମଳା ନାୟକ'"
+          ],
+          "expected": [
+            "Name rendered in clean Odia typography without corruption"
+          ]
+        },
+        {
+          "id": "TC-EDG-005",
+          "title": "Responsive viewport check (375x812, 768x1024, 1440x900)",
+          "route": "/dashboard",
+          "authRequired": false,
+          "steps": [
+            "Resize browser viewport across mobile, tablet, and desktop"
+          ],
+          "expected": [
+            "Layout adapts without horizontal overflow"
+          ]
+        }
+      ]
+    }
+  ]
+}
