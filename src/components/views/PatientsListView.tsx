@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useTriage } from '../../context/TriageContext';
 import { useRole } from '../../context/RoleContext';
+import { useToast } from '../../context/ToastContext';
 import { PriorityBadge, StatusBadge } from '../common/Badge';
 import { Button } from '../common/Button';
 import {
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   CheckCircle2,
   WifiOff,
+  Download,
 } from 'lucide-react';
 import { Priority } from '../../types/triage';
 import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
@@ -37,6 +39,7 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
     setIsAutoPolling,
   } = useTriage();
   const { isOffline, currentFacility } = useRole();
+  const toast = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<string>('ALL');
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
@@ -44,7 +47,42 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   const handleManualRefresh = async () => {
     setIsManualRefreshing(true);
     await refreshQueue();
-    setTimeout(() => setIsManualRefreshing(false), 500);
+    setTimeout(() => {
+      setIsManualRefreshing(false);
+      toast.success('Patient triage queue refreshed successfully.');
+    }, 500);
+  };
+
+  const handleExportCSV = () => {
+    if (filtered.length === 0) {
+      toast.warning('No patient records to export matching current filter.');
+      return;
+    }
+
+    const headers = ['Patient ID', 'Name', 'Age', 'Gender', 'Language', 'Priority', 'Status', 'Chief Complaint', 'Contact', 'Facility'];
+    const rows = filtered.map((p) => [
+      `"${p.id}"`,
+      `"${p.name.replace(/"/g, '""')}"`,
+      p.age,
+      `"${p.gender}"`,
+      `"${p.primaryLanguage}"`,
+      `"${p.priority}"`,
+      `"${p.status}"`,
+      `"${p.chiefComplaint.replace(/"/g, '""')}"`,
+      `"${p.contactMasked}"`,
+      `"${currentFacility.name.replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `NIRO_Patient_Roster_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${filtered.length} patient records to CSV.`, 'Roster Exported');
   };
 
   const filtered = patients.filter((p) => {
@@ -109,6 +147,15 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isManualRefreshing ? 'animate-spin text-blue-600' : ''}`} />
           </button>
+
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handleExportCSV}
+            icon={<Download className="w-4 h-4" />}
+          >
+            Export CSV
+          </Button>
 
           <Button variant="primary" size="md" onClick={onNewIntake} icon={<PlusCircle className="w-4 h-4" />}>
             Start New Intake

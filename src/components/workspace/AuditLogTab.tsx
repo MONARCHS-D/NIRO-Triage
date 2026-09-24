@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Patient } from '../../types/triage';
 import { Shield, Clock, FileBadge, Lock, CheckCircle2, Download, FileJson, FileSpreadsheet } from 'lucide-react';
 import { exportAuditTrail } from '../../lib/api/auditLogService';
+import { useToast } from '../../context/ToastContext';
 
 interface AuditLogTabProps {
   patient: Patient;
@@ -11,6 +12,7 @@ interface AuditLogTabProps {
 
 export const AuditLogTab: React.FC<AuditLogTabProps> = ({ patient }) => {
   const [filterRole, setFilterRole] = useState<'ALL' | 'AI' | 'HUMAN'>('ALL');
+  const toast = useToast();
 
   const filteredLogs = patient.auditLog.filter((log) => {
     const isAi = log.actor.includes('AI') || log.actor.includes('NIRO') || log.actorRole.includes('AI');
@@ -18,6 +20,14 @@ export const AuditLogTab: React.FC<AuditLogTabProps> = ({ patient }) => {
     if (filterRole === 'HUMAN') return !isAi;
     return true;
   });
+
+  const handleExport = (format: 'json' | 'csv') => {
+    exportAuditTrail(patient.id, patient.auditLog, format);
+    toast.success(
+      `ABDM audit log exported in ${format.toUpperCase()} format.`,
+      'Audit Trail Exported'
+    );
+  };
 
   return (
     <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs max-w-4xl space-y-4">
@@ -41,7 +51,7 @@ export const AuditLogTab: React.FC<AuditLogTabProps> = ({ patient }) => {
           {/* Export JSON */}
           <button
             type="button"
-            onClick={() => exportAuditTrail(patient.id, patient.auditLog, 'json')}
+            onClick={() => handleExport('json')}
             className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
             title="Download ABDM Audit Trail in JSON"
           >
@@ -52,7 +62,7 @@ export const AuditLogTab: React.FC<AuditLogTabProps> = ({ patient }) => {
           {/* Export CSV */}
           <button
             type="button"
-            onClick={() => exportAuditTrail(patient.id, patient.auditLog, 'csv')}
+            onClick={() => handleExport('csv')}
             className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
             title="Download Audit Trail in CSV"
           >

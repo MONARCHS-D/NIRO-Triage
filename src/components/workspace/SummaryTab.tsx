@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useTriage } from '../../context/TriageContext';
 import { useRole } from '../../context/RoleContext';
+import { useToast } from '../../context/ToastContext';
 import { AiOrganizationIllustration } from '../illustrations/AiOrganizationIllustration';
 import { createReferral } from '../../lib/api/referralService';
 import { recordAuditLog } from '../../lib/api/auditLogService';
@@ -40,6 +41,7 @@ interface SummaryTabProps {
 export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab }) => {
   const { setPatientPriority, approvePatientNote, escalatePatientCase } = useTriage();
   const { currentFacility, currentUser } = useRole();
+  const toast = useToast();
   const [approvalNotes, setApprovalNotes] = useState('');
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [showReferralDialog, setShowReferralDialog] = useState(false);
@@ -70,6 +72,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
       details: { notes: approvalNotes },
     });
     setShowApprovalDialog(false);
+    toast.success(`Case for ${patient.name} approved & dispatched to OPD queue.`, 'Case Approved');
   };
 
   const handleReferralSubmit = async (e: React.FormEvent) => {
@@ -97,8 +100,10 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
       setCreatedReferral(res);
       setShowReferralDialog(false);
       setShowSlipModal(true);
+      toast.success(`Referral transfer slip generated for ${referralTarget}.`, 'Referral Issued');
     } catch (err) {
       console.warn('[NIRO] Referral fallback handling', err);
+      toast.info('Referral slip created in local offline queue.', 'Referral Queued');
     } finally {
       setIsSubmittingReferral(false);
     }
@@ -368,7 +373,10 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
                     <Button
                       variant="primary"
                       size="sm"
-                      onClick={() => setIsEditingSummary(false)}
+                      onClick={() => {
+                        setIsEditingSummary(false);
+                        toast.success('Clinical note summary updated and saved.', 'Summary Updated');
+                      }}
                     >
                       Save Changes
                     </Button>
@@ -417,21 +425,30 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
               <Button
                 variant="secondary"
                 size="md"
-                onClick={() => setPatientPriority(patient.id, 'GREEN', 'Marked Routine by Reviewer')}
+                onClick={() => {
+                  setPatientPriority(patient.id, 'GREEN', 'Marked Routine by Reviewer');
+                  toast.info('Priority set to Routine (Green).', 'Priority Updated');
+                }}
               >
                 Mark Low
               </Button>
               <Button
                 variant="secondary"
                 size="md"
-                onClick={() => setPatientPriority(patient.id, 'YELLOW', 'Marked Medium by Reviewer')}
+                onClick={() => {
+                  setPatientPriority(patient.id, 'YELLOW', 'Marked Medium by Reviewer');
+                  toast.info('Priority set to Prompt Review (Yellow).', 'Priority Updated');
+                }}
               >
                 Mark Med
               </Button>
               <Button
                 variant="outline-destructive"
                 size="md"
-                onClick={() => escalatePatientCase(patient.id, 'Escalated from summary decision bar')}
+                onClick={() => {
+                  escalatePatientCase(patient.id, 'Escalated from summary decision bar');
+                  toast.warning('Case flagged as HIGH PRIORITY and escalated.', 'Case Escalated');
+                }}
               >
                 Escalate
               </Button>

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useTriage } from '../../context/TriageContext';
 import { useRole } from '../../context/RoleContext';
+import { useToast } from '../../context/ToastContext';
 import { KpiCard } from '../common/KpiCard';
 import { SkeletonKpiCard, SkeletonTable } from '../common/SkeletonGrid';
 import { PriorityBadge, StatusBadge } from '../common/Badge';
@@ -48,13 +49,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     refreshQueue,
   } = useTriage();
   const { currentUser, currentFacility, isOffline } = useRole();
+  const toast = useToast();
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   const handleManualRefresh = async () => {
     setIsManualRefreshing(true);
     await refreshQueue();
-    setTimeout(() => setIsManualRefreshing(false), 500);
+    setTimeout(() => {
+      setIsManualRefreshing(false);
+      toast.success('Clinical dashboard queue synced with server.', 'Queue Synced');
+    }, 500);
   };
 
   // Compute stats
