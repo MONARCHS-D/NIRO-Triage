@@ -27,7 +27,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [bgChoice, setBgChoice] = useState<'clinic' | 'facility'>('clinic');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -37,19 +37,23 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      const success = login(staffId, password);
+    try {
+      const success = await login(staffId, password);
       if (success) {
         router.push('/dashboard');
       } else {
         setErrorMsg("We couldn't sign you in. Check your staff ID and password and try again.");
         setIsLoading(false);
       }
-    }, 400);
+    } catch (err: any) {
+      setErrorMsg(err.message || "We couldn't sign you in. Check your staff ID and password and try again.");
+      setIsLoading(false);
+    }
   };
 
-  const handleQuickDemoLogin = (roleIdentifier: string) => {
-    login(roleIdentifier, 'demo123');
+  const handleQuickDemoLogin = async (roleIdentifier: string) => {
+    setIsLoading(true);
+    await login(roleIdentifier, 'demo123');
     router.push('/dashboard');
   };
 

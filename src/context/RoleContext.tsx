@@ -1,8 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Facility, UserProfile, UserRole } from '../types/roles';
 import { INITIAL_FACILITIES, INITIAL_USERS } from '../lib/syntheticData';
+import { authApi } from '../lib/api/auth';
+import { getAuthToken, setAuthToken } from '../lib/api/client';
 
 interface RoleContextType {
   currentUser: UserProfile;
@@ -18,8 +20,8 @@ interface RoleContextType {
   setUserRole: (role: UserRole) => void;
   setViewMode: (mode: 'REVIEWER_DESKTOP' | 'PATIENT_MOBILE') => void;
   setIsOffline: (offline: boolean) => void;
-  login: (staffIdOrEmail: string, password?: string) => boolean;
-  logout: () => void;
+  login: (staffIdOrEmail: string, password?: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   setIsSessionExpired: (expired: boolean) => void;
 }
 
@@ -34,21 +36,10 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [users] = useState<UserProfile[]>(INITIAL_USERS);
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
   const [isOffline, setIsOffline] = useState<boolean>(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored !== null) {
-        setIsAuthenticated(stored === 'true');
-      }
-    } catch {
-      // ignore storage errors
-    }
-  }, []);
-
-  const setUserRole = (role: UserRole) => {
+  const setUserRole = useCallback((role: UserRole) => {
     const matched = users.find((u) => u.role === role);
     if (matched) {
       setCurrentUser(matched);
@@ -58,14 +49,69 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         setViewMode('REVIEWER_DESKTOP');
       }
     }
-  };
+  }, [users, viewMode]);
 
-  const login = (staffIdOrEmail: string, password?: string): boolean => {
-    // Validate credentials: accept any non-empty input for prototype, or match known profiles
+  // Initial load: check token and validate session with backend
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = getAuthToken();
+      if (token) {
+        try {
+          const profile = await authApi.getMe();
+          if (profile && profile.id) {
+            setIsAuthenticated(true);
+            // Map backend role to frontend role if available
+            const backendRole = profile.roles?.[0]?.toUpperCase();
+            if (backendRole && users.some((u) => u.role === backendRole)) {
+              setUserRole(backendRole as UserRole);
+            }
+          }
+        } catch (e) {
+          console.warn('Backend session verification failed, falling back to local storage:', e);
+          const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+          if (stored === 'true') {
+            setIsAuthenticated(true);
+          }
+        }
+      } else {
+        const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (stored === 'true') {
+          setIsAuthenticated(true);
+        }
+      }
+    };
+
+    initAuth();
+
+    // Session expiration listener
+    const handleSessionExpired = () => {
+      setIsSessionExpired(true);
+      setIsAuthenticated(false);
+      setAuthToken(null);
+    };
+
+    window.addEventListener('careintel:session-expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('careintel:session-expired', handleSessionExpired);
+    };
+  }, [setUserRole, users]);
+
+  const login = async (staffIdOrEmail: string, password = 'password123'): Promise<boolean> => {
     if (!staffIdOrEmail || staffIdOrEmail.trim().length === 0) {
       return false;
     }
 
+    try {
+      // Attempt backend login first
+      const email = staffIdOrEmail.includes('@') ? staffIdOrEmail : `${staffIdOrEmail}@careintel.local`;
+      await authApi.login({ email, password });
+      setIsOffline(false);
+    } catch (e) {
+      console.warn('Backend login endpoint unavailable or rejected, using prototype mode:', e);
+      setIsOffline(true);
+    }
+
+    // Role mapping for UI layout
     const lower = staffIdOrEmail.toLowerCase();
     if (lower.includes('nurse') || lower.includes('sunita')) {
       setUserRole('NURSE');
@@ -87,8 +133,14 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // Ignore network errors during logout
+    }
     setIsAuthenticated(false);
+    setAuthToken(null);
     if (typeof window !== 'undefined') {
       localStorage.setItem(AUTH_STORAGE_KEY, 'false');
     }

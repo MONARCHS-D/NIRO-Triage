@@ -19,7 +19,13 @@ import {
   User,
   ShieldCheck,
   FileCheck,
+  Loader2,
 } from 'lucide-react';
+import { consentApi } from '../../lib/api/consent';
+import { caseApi } from '../../lib/api/cases';
+import { evidenceApi } from '../../lib/api/evidence';
+import { processingApi } from '../../lib/api/processing';
+import { structuringApi } from '../../lib/api/structuring';
 
 interface NewIntakeViewProps {
   onIntakeCompleted: (patientId: string) => void;
@@ -55,6 +61,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
     symptoms: Symptom[];
   } | null>(null);
   const [extractedFacts, setExtractedFacts] = useState<ExtractedFact[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handleNextFromStep1 = () => {
     if (!consentGranted) {
@@ -64,9 +71,48 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
     setCurrentStep(2);
   };
 
-  const handleFinalSubmit = () => {
+  const handleFinalSubmit = async () => {
+    setIsSubmitting(true);
     const newId = `P-${Math.floor(1000 + Math.random() * 9000)}`;
     const syntheticCode = `SYN-2026-${Math.floor(100 + Math.random() * 900)}`;
+    let backendCaseId: string | undefined = undefined;
+    let backendVersion = 1;
+
+    try {
+      // 1. Synthetic patient UUID
+      const syntheticSubjectId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+
+      // 2. Request & Capture Consent
+      const consent = await consentApi.requestAndCapture(syntheticSubjectId, 'data_processing', '1.0');
+
+      // 3. Create Case
+      const caseRes = await caseApi.createCase({
+        synthetic_subject_id: syntheticSubjectId,
+        consent_id: consent.id,
+      });
+
+      backendCaseId = caseRes.case_id;
+      backendVersion = caseRes.version;
+
+      // 4. Ingest Evidence
+      const complaintText = typedComplaint || capturedVoiceData?.translation || 'General symptoms recorded at intake';
+      const evidenceRes = await evidenceApi.registerTextEvidence({
+        case_id: caseRes.case_id,
+        text_content: complaintText,
+        consent_id: consent.id,
+        source_language: capturedVoiceData?.language ? 'or' : 'en',
+      });
+
+      // 5. Trigger Processing
+      await processingApi.triggerProcessing({
+        evidence_id: evidenceRes.evidence_id,
+        processor_type: 'candidate_extraction',
+      });
+    } catch (e) {
+      console.warn('Backend API intake pipeline bypassed with local fallback:', e);
+    } finally {
+      setIsSubmitting(false);
+    }
 
     let symptomsList: Symptom[] = [];
     if (capturedVoiceData && capturedVoiceData.symptoms.length > 0) {
@@ -86,6 +132,8 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
 
     const newPatient: Patient = {
       id: newId,
+      caseId: backendCaseId,
+      version: backendVersion,
       syntheticCode,
       name,
       age: parseInt(age) || 35,
@@ -576,11 +624,17 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
           </div>
 
           <div className="flex items-center justify-between pt-4 border-t border-[#E6ECF2]">
-            <Button variant="secondary" size="md" onClick={() => setCurrentStep(2)} icon={<ArrowLeft className="w-4 h-4" />}>
+            <Button variant="secondary" size="md" onClick={() => setCurrentStep(2)} icon={<ArrowLeft className="w-4 h-4" />} disabled={isSubmitting}>
               Back to Input
             </Button>
-            <Button variant="primary" size="lg" onClick={handleFinalSubmit} icon={<CheckCircle2 className="w-4 h-4" />}>
-              Send to Triage Queue
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={handleFinalSubmit}
+              disabled={isSubmitting}
+              icon={isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            >
+              {isSubmitting ? 'Registering Intake & Creating Case…' : 'Send to Triage Queue'}
             </Button>
           </div>
         </div>

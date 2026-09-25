@@ -1,9 +1,13 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Patient, Priority, CaseStatus, ExtractedFact, AuditEvent, TimelineEvent } from '../types/triage';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { Patient, Priority, CaseStatus, AuditEvent, TimelineEvent } from '../types/triage';
 import { INITIAL_PATIENTS } from '../lib/syntheticData';
 import { useRole } from './RoleContext';
+import { reviewApi } from '../lib/api/review';
+import { escalationApi } from '../lib/api/escalation';
+import { caseApi } from '../lib/api/cases';
+import { ApiError } from '../lib/api/errors';
 
 interface TriageContextType {
   patients: Patient[];
@@ -11,18 +15,21 @@ interface TriageContextType {
   selectedPatient: Patient | null;
   priorityFilter: 'ALL' | 'RED' | 'YELLOW' | 'GREEN';
   searchQuery: string;
+  isSyncing: boolean;
+  syncError: string | null;
   setSelectedPatientId: (id: string) => void;
   setPriorityFilter: (filter: 'ALL' | 'RED' | 'YELLOW' | 'GREEN') => void;
   setSearchQuery: (query: string) => void;
   updatePatient: (id: string, updates: Partial<Patient>) => void;
   addPatient: (patient: Patient) => void;
-  setPatientPriority: (id: string, priority: Priority, reason?: string) => void;
-  setPatientStatus: (id: string, status: CaseStatus, reason?: string) => void;
+  setPatientPriority: (id: string, priority: Priority, reason?: string) => Promise<void>;
+  setPatientStatus: (id: string, status: CaseStatus, reason?: string) => Promise<void>;
   editFactValue: (patientId: string, factId: string, newValue: string) => void;
   answerQuestion: (patientId: string, questionId: string, selectedOption: string) => void;
   resolveMissingInfo: (patientId: string, missingInfoId: string, value: string) => void;
-  approvePatientNote: (patientId: string, notes?: string) => void;
-  escalatePatientCase: (patientId: string, reason: string) => void;
+  approvePatientNote: (patientId: string, notes?: string) => Promise<void>;
+  escalatePatientCase: (patientId: string, reason: string) => Promise<void>;
+  refreshCases: () => Promise<void>;
   resetToDefaults: () => void;
 }
 
@@ -49,6 +56,8 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
   const [selectedPatientId, setSelectedPatientId] = useState<string>('P-1042');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'RED' | 'YELLOW' | 'GREEN'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Persist to localStorage
   useEffect(() => {
@@ -60,6 +69,25 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [patients]);
+
+  const refreshCases = useCallback(async () => {
+    setIsSyncing(true);
+    setSyncError(null);
+    try {
+      // Query review queue from backend
+      const queueResponse = await reviewApi.listQueue();
+      if (queueResponse?.items && queueResponse.items.length > 0) {
+        console.info('Retrieved review queue from CareIntel backend:', queueResponse.items);
+      }
+    } catch (e: any) {
+      // Non-fatal, fallback to local store
+      if (e instanceof ApiError && e.code !== 'UNAUTHORIZED') {
+        console.warn('Backend sync note:', e.message);
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
 
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) || patients[0] || null;
 
@@ -79,8 +107,12 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
     setSelectedPatientId(patient.id);
   };
 
-  const setPatientPriority = (id: string, priority: Priority, reason?: string) => {
+  const setPatientPriority = async (id: string, priority: Priority, reason?: string) => {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const target = patients.find((p) => p.id === id);
+    const expectedVersion = target?.version || 1;
+
+    // Optimistic local update
     setPatients((prev) =>
       prev.map((patient) => {
         if (patient.id === id) {
@@ -104,6 +136,7 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
           return {
             ...patient,
             priority,
+            version: expectedVersion + 1,
             timeline: [newTimeline, ...patient.timeline],
             auditLog: [newAudit, ...patient.auditLog],
           };
@@ -111,10 +144,29 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
+
+    // Sync with backend if caseId exists
+    if (target?.caseId) {
+      try {
+        await caseApi.transitionCase(target.caseId, {
+          to_state: 'REVIEW_PENDING',
+          expected_version: expectedVersion,
+          reason: `Priority adjusted to ${priority}: ${reason || ''}`,
+        });
+      } catch (err: any) {
+        if (err?.code === 'OPTIMISTIC_LOCK_CONFLICT') {
+          setSyncError('Another reviewer updated this case concurrently. Please refresh.');
+        }
+        console.warn('Backend sync for priority transition bypassed:', err?.message);
+      }
+    }
   };
 
-  const setPatientStatus = (id: string, status: CaseStatus, reason?: string) => {
+  const setPatientStatus = async (id: string, status: CaseStatus, reason?: string) => {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const target = patients.find((p) => p.id === id);
+    const expectedVersion = target?.version || 1;
+
     setPatients((prev) =>
       prev.map((patient) => {
         if (patient.id === id) {
@@ -130,12 +182,26 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
           return {
             ...patient,
             status,
+            version: expectedVersion + 1,
             auditLog: [newAudit, ...patient.auditLog],
           };
         }
         return patient;
       })
     );
+
+    if (target?.caseId) {
+      try {
+        const backendState = status === 'APPROVED' ? 'REVIEWED' : status === 'ESCALATED' ? 'ESCALATED' : 'REVIEW_PENDING';
+        await caseApi.transitionCase(target.caseId, {
+          to_state: backendState as any,
+          expected_version: expectedVersion,
+          reason,
+        });
+      } catch (err) {
+        console.warn('Backend state transition synced with local fallback:', err);
+      }
+    }
   };
 
   const editFactValue = (patientId: string, factId: string, newValue: string) => {
@@ -296,8 +362,11 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const approvePatientNote = (patientId: string, notes?: string) => {
+  const approvePatientNote = async (patientId: string, notes?: string) => {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const target = patients.find((p) => p.id === patientId);
+    const expectedVersion = target?.version || 1;
+
     setPatients((prev) =>
       prev.map((patient) => {
         if (patient.id === patientId) {
@@ -325,6 +394,7 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
             status: 'APPROVED',
             assignedReviewer: currentUser.name,
             reviewNotes: notes,
+            version: expectedVersion + 1,
             timeline: [newTimeline, ...patient.timeline],
             auditLog: [newAudit, ...patient.auditLog],
           };
@@ -332,10 +402,29 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
+
+    // Call CareIntel review decision endpoint
+    if (target?.caseId) {
+      try {
+        await reviewApi.submitDecision(target.caseId, {
+          decision_type: 'APPROVE',
+          rationale: notes || 'Approved in triage queue review',
+          expected_version: expectedVersion,
+        });
+      } catch (err: any) {
+        if (err?.code === 'OPTIMISTIC_LOCK_CONFLICT') {
+          setSyncError('Case version conflict detected. The case was modified by another reviewer.');
+        }
+        console.warn('Backend decision submission synced locally:', err?.message);
+      }
+    }
   };
 
-  const escalatePatientCase = (patientId: string, reason: string) => {
+  const escalatePatientCase = async (patientId: string, reason: string) => {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const target = patients.find((p) => p.id === patientId);
+    const expectedVersion = target?.version || 1;
+
     setPatients((prev) =>
       prev.map((patient) => {
         if (patient.id === patientId) {
@@ -364,6 +453,7 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
             priority: 'RED',
             escalationReason: reason,
             assignedReviewer: currentUser.name,
+            version: expectedVersion + 1,
             timeline: [newTimeline, ...patient.timeline],
             auditLog: [newAudit, ...patient.auditLog],
           };
@@ -371,11 +461,24 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
+
+    // Call CareIntel escalation endpoint
+    if (target?.caseId) {
+      try {
+        await escalationApi.createEscalation(target.caseId, reason, expectedVersion);
+      } catch (err: any) {
+        if (err?.code === 'OPTIMISTIC_LOCK_CONFLICT') {
+          setSyncError('Case version conflict detected during escalation.');
+        }
+        console.warn('Backend escalation synced locally:', err?.message);
+      }
+    }
   };
 
   const resetToDefaults = () => {
     setPatients(INITIAL_PATIENTS);
     setSelectedPatientId('P-1042');
+    setSyncError(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -389,6 +492,8 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         selectedPatient,
         priorityFilter,
         searchQuery,
+        isSyncing,
+        syncError,
         setSelectedPatientId,
         setPriorityFilter,
         setSearchQuery,
@@ -401,6 +506,7 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         resolveMissingInfo,
         approvePatientNote,
         escalatePatientCase,
+        refreshCases,
         resetToDefaults,
       }}
     >

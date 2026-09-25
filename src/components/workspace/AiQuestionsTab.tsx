@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Patient } from '../../types/triage';
-import { CheckCircle2, HelpCircle, Sparkles, MessageCircleQuestion } from 'lucide-react';
+import { CheckCircle2, Sparkles, Volume2, Loader2 } from 'lucide-react';
 import { useTriage } from '../../context/TriageContext';
+import { audioApi } from '../../lib/api/audio';
 
 interface AiQuestionsTabProps {
   patient: Patient;
@@ -11,6 +12,34 @@ interface AiQuestionsTabProps {
 
 export const AiQuestionsTab: React.FC<AiQuestionsTabProps> = ({ patient }) => {
   const { answerQuestion } = useTriage();
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+
+  const handlePlayQuestionAudio = async (questionId: string, text: string) => {
+    try {
+      setPlayingAudioId(questionId);
+      const audioUrl = await audioApi.createAudioUrl(text);
+      const audio = new Audio(audioUrl);
+      audio.onended = () => {
+        setPlayingAudioId(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+      audio.onerror = () => {
+        setPlayingAudioId(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+      await audio.play();
+    } catch (err) {
+      console.warn('TTS playback error, falling back to Web Speech API:', err);
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.onend = () => setPlayingAudioId(null);
+        utterance.onerror = () => setPlayingAudioId(null);
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setPlayingAudioId(null);
+      }
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs max-w-4xl">
@@ -21,7 +50,7 @@ export const AiQuestionsTab: React.FC<AiQuestionsTabProps> = ({ patient }) => {
             <h3 className="text-base font-bold text-[#102033]">AI Clinical Follow-up Questions</h3>
           </div>
           <p className="text-xs text-[#6B7B8F] mt-0.5">
-            Section 13: Targeted, language-aware clinical queries generated to clarify missing facts
+            Targeted, language-aware clinical queries generated to clarify missing facts
           </p>
         </div>
         <span className="text-xs font-semibold px-2.5 py-1 rounded bg-purple-50 text-purple-700 border border-purple-200">
@@ -41,6 +70,7 @@ export const AiQuestionsTab: React.FC<AiQuestionsTabProps> = ({ patient }) => {
         <div className="space-y-5">
           {patient.aiQuestions.map((q, idx) => {
             const isAnswered = !!q.answeredOption;
+            const isPlaying = playingAudioId === q.id;
 
             return (
               <div
@@ -96,6 +126,24 @@ export const AiQuestionsTab: React.FC<AiQuestionsTabProps> = ({ patient }) => {
                       )}
                     </div>
                   </div>
+
+                  {/* TTS Speech Button */}
+                  <button
+                    type="button"
+                    onClick={() => handlePlayQuestionAudio(q.id, q.questionText)}
+                    disabled={isPlaying}
+                    title="Play question aloud in spoken voice (TTS)"
+                    className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1 text-xs cursor-pointer shadow-2xs"
+                  >
+                    {isPlaying ? (
+                      <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5 text-slate-500" />
+                    )}
+                    <span className="text-[11px] font-medium hidden sm:inline">
+                      {isPlaying ? 'Playing…' : 'Read Aloud'}
+                    </span>
+                  </button>
                 </div>
 
                 {/* Option Buttons */}

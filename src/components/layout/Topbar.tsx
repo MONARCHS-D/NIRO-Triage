@@ -15,6 +15,7 @@ import {
 import { useRole } from '../../context/RoleContext';
 import { useTriage } from '../../context/TriageContext';
 import { UserRole } from '../../types/roles';
+import { BackendHealthBadge } from '../common/BackendHealthBadge';
 
 export const Topbar: React.FC = () => {
   const {
@@ -104,6 +105,9 @@ export const Topbar: React.FC = () => {
             </select>
             <ChevronDown className="w-3.5 h-3.5 text-[#164FD6] absolute right-2 pointer-events-none" />
           </div>
+
+          {/* Live Backend Health & Database Connectivity Badge */}
+          <BackendHealthBadge />
 
           {/* Offline Mode Toggle Button */}
           <button
