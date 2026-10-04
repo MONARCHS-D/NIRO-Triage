@@ -26,6 +26,7 @@ import { caseApi } from '../../lib/api/cases';
 import { evidenceApi } from '../../lib/api/evidence';
 import { processingApi } from '../../lib/api/processing';
 import { structuringApi } from '../../lib/api/structuring';
+import { reviewApi } from '../../lib/api/review';
 
 interface NewIntakeViewProps {
   onIntakeCompleted: (patientId: string) => void;
@@ -108,6 +109,13 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         evidence_id: evidenceRes.evidence_id,
         processor_type: 'candidate_extraction',
       });
+
+      // 6. Enter Review Queue in backend
+      try {
+        await reviewApi.enterQueue(caseRes.case_id);
+      } catch (qErr) {
+        console.warn('Backend review queue entry note:', qErr);
+      }
     } catch (e) {
       console.warn('Backend API intake pipeline bypassed with local fallback:', e);
     } finally {

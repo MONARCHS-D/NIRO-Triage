@@ -3,11 +3,19 @@
  */
 
 import { apiFetch } from './client';
-import { EvaluateRequest, EvaluateResponse } from './types';
+import {
+  ClarificationQuestionItem,
+  ConflictItem,
+  EvaluateRequest,
+  EvaluateResponse,
+  MissingInfoItem,
+  StructuringSummaryResponse,
+  TimelineEventItem,
+} from './types';
 
 export const structuringApi = {
   /**
-   * Trigger the synchronous structuring pipeline for a case.
+   * Trigger the synchronous structuring evaluation pipeline for a case.
    */
   async evaluateCase(caseId: string, extractionRunId: string): Promise<EvaluateResponse> {
     const payload: EvaluateRequest = { extraction_run_id: extractionRunId };
@@ -20,8 +28,8 @@ export const structuringApi = {
   /**
    * Get chronological timeline events for a structured case.
    */
-  async getTimeline(caseId: string): Promise<{ data: any[] }> {
-    return apiFetch<{ data: any[] }>(`/cases/${caseId}/timeline`, {
+  async getTimeline(caseId: string): Promise<TimelineEventItem[]> {
+    return apiFetch<TimelineEventItem[]>(`/cases/${caseId}/timeline`, {
       method: 'GET',
     });
   },
@@ -29,8 +37,8 @@ export const structuringApi = {
   /**
    * Get detected clinical conflict and contradiction records.
    */
-  async getConflicts(caseId: string): Promise<{ data: any[] }> {
-    return apiFetch<{ data: any[] }>(`/cases/${caseId}/conflicts`, {
+  async getConflicts(caseId: string): Promise<ConflictItem[]> {
+    return apiFetch<ConflictItem[]>(`/cases/${caseId}/conflicts`, {
       method: 'GET',
     });
   },
@@ -38,8 +46,8 @@ export const structuringApi = {
   /**
    * Get missing clinical information items against active checklists.
    */
-  async getMissingInfo(caseId: string): Promise<{ data: any[] }> {
-    return apiFetch<{ data: any[] }>(`/cases/${caseId}/missing-info`, {
+  async getMissingInfo(caseId: string): Promise<MissingInfoItem[]> {
+    return apiFetch<MissingInfoItem[]>(`/cases/${caseId}/missing-info`, {
       method: 'GET',
     });
   },
@@ -47,17 +55,17 @@ export const structuringApi = {
   /**
    * Get generated clarification follow-up questions.
    */
-  async getQuestions(caseId: string): Promise<{ data: any[] }> {
-    return apiFetch<{ data: any[] }>(`/cases/${caseId}/questions`, {
+  async getQuestions(caseId: string): Promise<ClarificationQuestionItem[]> {
+    return apiFetch<ClarificationQuestionItem[]>(`/cases/${caseId}/questions`, {
       method: 'GET',
     });
   },
 
   /**
-   * Get structured case summary.
+   * Get overall structuring counts and summary status.
    */
-  async getSummary(caseId: string): Promise<{ data: any }> {
-    return apiFetch<{ data: any }>(`/cases/${caseId}/summary`, {
+  async getStructuringSummary(caseId: string): Promise<StructuringSummaryResponse> {
+    return apiFetch<StructuringSummaryResponse>(`/cases/${caseId}/structuring-summary`, {
       method: 'GET',
     });
   },

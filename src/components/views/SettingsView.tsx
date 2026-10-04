@@ -155,7 +155,7 @@ export const SettingsView: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-bold text-[#102033]">CareIntel API &amp; Cloud Database</h3>
                   <p className="text-xs text-[#6B7B8F]">
-                    Live telemetry from hosted Prisma Postgres and FastAPI backend
+                    Live telemetry from hosted Supabase Postgres, Redis Cloud, and FastAPI backend
                   </p>
                 </div>
               </div>
@@ -165,7 +165,7 @@ export const SettingsView: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
                 <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">Database</span>
-                <span className="font-semibold text-[#102033] block mt-0.5">Prisma Postgres</span>
+                <span className="font-semibold text-[#102033] block mt-0.5">Supabase Postgres</span>
                 <span className="text-[10px] text-emerald-600 font-medium">Direct Asyncpg SSL</span>
               </div>
               <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">

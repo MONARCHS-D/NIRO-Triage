@@ -76,8 +76,8 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
     try {
       // Query review queue from backend
       const queueResponse = await reviewApi.listQueue();
-      if (queueResponse?.items && queueResponse.items.length > 0) {
-        console.info('Retrieved review queue from CareIntel backend:', queueResponse.items);
+      if (Array.isArray(queueResponse) && queueResponse.length > 0) {
+        console.info('Retrieved review queue from CareIntel backend:', queueResponse);
       }
     } catch (e: any) {
       // Non-fatal, fallback to local store
@@ -407,9 +407,12 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
     if (target?.caseId) {
       try {
         await reviewApi.submitDecision(target.caseId, {
+          draft_id: target.draftId || target.caseId,
           decision_type: 'APPROVE',
           rationale: notes || 'Approved in triage queue review',
-          expected_version: expectedVersion,
+          expected_case_version: expectedVersion,
+          expected_queue_version: target.queueVersion || expectedVersion,
+          expected_draft_version: target.draftVersion || 1,
         });
       } catch (err: any) {
         if (err?.code === 'OPTIMISTIC_LOCK_CONFLICT') {
@@ -465,7 +468,11 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
     // Call CareIntel escalation endpoint
     if (target?.caseId) {
       try {
-        await escalationApi.createEscalation(target.caseId, reason, expectedVersion);
+        await escalationApi.createEscalation(target.caseId, {
+          reason,
+          expected_case_version: expectedVersion,
+          expected_queue_version: target.queueVersion || expectedVersion,
+        });
       } catch (err: any) {
         if (err?.code === 'OPTIMISTIC_LOCK_CONFLICT') {
           setSyncError('Case version conflict detected during escalation.');

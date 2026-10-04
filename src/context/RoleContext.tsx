@@ -36,7 +36,13 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [users] = useState<UserProfile[]>(INITIAL_USERS);
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
   const [isOffline, setIsOffline] = useState<boolean>(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      return stored !== 'false';
+    }
+    return true;
+  });
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
 
   const setUserRole = useCallback((role: UserRole) => {

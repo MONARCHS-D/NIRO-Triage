@@ -82,7 +82,7 @@ export const BackendHealthBadge: React.FC = () => {
         <Database className="w-3 h-3 opacity-70 hidden sm:inline" />
         <span className="font-semibold hidden sm:inline">
           {status === 'ONLINE'
-            ? 'API: Prisma DB'
+            ? 'API: Supabase DB'
             : status === 'CHECKING'
             ? 'Connecting...'
             : status === 'DEGRADED'
@@ -155,7 +155,7 @@ export const BackendHealthBadge: React.FC = () => {
                     Infrastructure Checks
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-600">Prisma Postgres DB:</span>
+                    <span className="text-slate-600">Supabase Postgres DB:</span>
                     <span className="font-semibold text-emerald-600 uppercase text-[10px]">
                       {healthData.checks.database || 'Connected'}
                     </span>

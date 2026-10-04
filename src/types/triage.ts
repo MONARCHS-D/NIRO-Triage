@@ -133,4 +133,9 @@ export interface Patient {
   facilityId: string;
   version?: number;
   caseId?: string;
+  draftId?: string;
+  draftVersion?: number;
+  queueVersion?: number;
+  encounterId?: string;
 }
+

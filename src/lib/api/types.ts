@@ -206,6 +206,19 @@ export interface TriggerProcessingResponse {
   message?: string;
 }
 
+export interface ProcessingRunResponse {
+  run_id: string;
+  evidence_id: string;
+  processor_type: string;
+  status: string;
+  created_at?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  error_category?: string | null;
+  error_detail?: string | null;
+  output_artifact?: Record<string, any> | null;
+}
+
 export type AsyncTaskStatus =
   | 'PENDING'
   | 'QUEUED'
@@ -237,35 +250,61 @@ export interface EvaluateRequest {
 
 export interface EvaluateResponse {
   run_id: string;
+  status: string;
+  timeline_count: number;
+  conflict_count: number;
+  missing_info_count: number;
+  question_count: number;
+}
+
+export interface StructuringSummaryResponse {
+  run_id: string;
+  extraction_run_id: string;
+  status: string;
+  timeline_count: number;
+  conflict_count: number;
+  missing_info_count: number;
+  question_count: number;
 }
 
 export interface TimelineEventItem {
   id: string;
+  structuring_run_id?: string;
   event_type: string;
   source_statement: string;
   raw_temporal_expression?: string;
   temporal_precision?: string;
   resolution_state?: string;
-  normalized_start?: string;
-  normalized_end?: string;
+  normalized_start?: string | null;
+  normalized_end?: string | null;
+  unresolved_reason?: string | null;
   status: string;
-  created_at: string;
+  evidence_id?: string;
+  candidate_id?: string;
+  extraction_run_id?: string;
+  created_at?: string;
 }
 
 export interface ConflictItem {
   id: string;
   field_type: string;
   status: string;
+  detection_run_id?: string;
   description?: string;
   candidates?: Array<{ id: string; value: string; source: string }>;
 }
 
 export interface MissingInfoItem {
   id: string;
-  field: string;
-  label: string;
-  category: string;
-  status: 'NOT_PROVIDED' | 'OBTAINED' | 'UNAVAILABLE';
+  evaluation_run_id?: string;
+  requirement_key?: string;
+  checklist_version?: string;
+  field?: string;
+  label?: string;
+  category?: string;
+  status: 'NOT_PROVIDED' | 'OBTAINED' | 'UNAVAILABLE' | string;
+  materiality?: string;
+  resolution?: string | null;
   reason?: string;
   askPrompt?: string;
   quickOptions?: string[];
@@ -273,8 +312,15 @@ export interface MissingInfoItem {
 
 export interface ClarificationQuestionItem {
   id: string;
+  evaluation_run_id?: string;
+  requirement_key?: string;
+  missing_item_id?: string;
   missingInfoId?: string;
-  questionText: string;
+  question_text?: string;
+  questionText?: string;
+  round_number?: number;
+  status?: string;
+  generator_version?: string;
   options?: string[];
   answeredOption?: string;
 }
@@ -287,15 +333,147 @@ export type ReviewDecisionType =
   | 'ESCALATE'
   | 'REFER';
 
-export interface ReviewDecisionRequest {
-  decision_type: ReviewDecisionType;
-  rationale?: string | null;
+export interface QueueItemResponse {
+  id: string;
+  case_id: string;
+  encounter_id?: string | null;
+  status: string;
+  assigned_reviewer_id?: string | null;
+  priority_bucket: string;
+  version: number;
+}
+
+export interface EnterQueueRequest {
+  encounter_id?: string | null;
+}
+
+export interface AssignReviewerRequest {
+  reviewer_id: string;
+  expected_version: number;
+}
+
+export interface ReassignReviewerRequest {
+  reviewer_id: string;
+  reason: string;
+  expected_version: number;
+}
+
+export interface VersionRequest {
   expected_version: number;
 }
 
 export interface DraftActionRequest {
-  rationale?: string;
-  edited_content?: Record<string, any>;
+  expected_draft_version: number;
+  expected_queue_version: number;
+}
+
+export interface RejectDraftRequest extends DraftActionRequest {
+  rationale: string;
+}
+
+export interface EditDraftRequest extends DraftActionRequest {
+  edited_content: Record<string, any>;
+  rationale?: string | null;
+}
+
+export interface DraftActionResponse {
+  id: string;
+  reviewer_status: string;
+  reviewer_id?: string | null;
+  version: number;
+}
+
+export interface ReviewDecisionRequest {
+  draft_id: string;
+  decision_type: ReviewDecisionType;
+  rationale?: string | null;
+  expected_case_version: number;
+  expected_queue_version: number;
+  expected_draft_version: number;
+}
+
+export interface ReviewDecisionResponse {
+  id: string;
+  case_id: string;
+  reviewer_id: string;
+  draft_id?: string | null;
+  draft_version?: number | null;
+  decision_type: string;
+  case_version: number;
+}
+
+// ── Escalation ──────────────────────────────────────────────────────────────
+export interface CreateEscalationRequest {
+  reason: string;
+  expected_case_version: number;
+  expected_queue_version: number;
+}
+
+export interface ResolveEscalationRequest {
+  resolution_notes: string;
+  expected_case_version: number;
+  expected_queue_version: number;
+}
+
+export interface EscalationResponse {
+  id: string;
+  case_id: string;
+  escalated_by: string;
+  status: string;
+  reason: string;
+  resolved_by?: string | null;
+  resolution_notes?: string | null;
+}
+
+// ── Handoff & Referral ──────────────────────────────────────────────────────
+export interface PrepareReferralRequest {
+  evidence_ids: string[];
+}
+
+export interface ReferralPackageResponse {
+  id: string;
+  case_id: string;
+  version: number;
+  prepared_by: string;
+  evidence_ids: string[];
+  status: string;
+}
+
+export interface InitiateHandoffRequest {
+  recipient_id: string;
+}
+
+export interface SendHandoffRequest {
+  expected_version: number;
+}
+
+export interface AcknowledgeHandoffRequest {
+  reference: string;
+  expected_version: number;
+}
+
+export interface CompleteHandoffRequest {
+  expected_handoff_version: number;
+  expected_case_version: number;
+}
+
+export interface HandoffResponse {
+  id: string;
+  case_id: string;
+  referral_package_id: string;
+  recipient_id: string;
+  channel?: string | null;
+  status: string;
+  sent_by: string;
+  sent_at?: string | null;
+  acknowledged_at?: string | null;
+  version: number;
+}
+
+export interface RecipientResponse {
+  id: string;
+  name: string;
+  recipient_type: string;
 }
 
 // ── Audio & Speech ──────────────────────────────────────────────────────────
@@ -303,3 +481,4 @@ export interface TextToSpeechRequest {
   text: string;
   voice?: string | null;
 }
+

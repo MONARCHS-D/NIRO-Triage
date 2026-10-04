@@ -3,18 +3,24 @@
  */
 
 import { apiFetch } from './client';
+import { CreateEscalationRequest, EscalationResponse, ResolveEscalationRequest } from './types';
 
 export const escalationApi = {
   /**
    * Create an urgent clinical escalation for a case.
    */
-  async createEscalation(caseId: string, reason: string, expectedVersion: number): Promise<{ status: string }> {
-    return apiFetch<{ status: string }>(`/cases/${caseId}/escalation`, {
+  async createEscalation(
+    caseId: string,
+    payload: CreateEscalationRequest | { reason: string; expected_case_version: number; expected_queue_version?: number }
+  ): Promise<EscalationResponse> {
+    const body: CreateEscalationRequest = {
+      reason: payload.reason,
+      expected_case_version: payload.expected_case_version,
+      expected_queue_version: payload.expected_queue_version ?? payload.expected_case_version,
+    };
+    return apiFetch<EscalationResponse>(`/cases/${caseId}/escalation`, {
       method: 'POST',
-      body: {
-        reason,
-        expected_version: expectedVersion,
-      },
+      body,
     });
   },
 
@@ -23,15 +29,16 @@ export const escalationApi = {
    */
   async resolveEscalation(
     escalationId: string,
-    resolutionNotes: string,
-    expectedCaseVersion: number
-  ): Promise<{ status: string }> {
-    return apiFetch<{ status: string }>(`/escalations/${escalationId}/resolve`, {
+    payload: ResolveEscalationRequest | { resolution_notes: string; expected_case_version: number; expected_queue_version?: number }
+  ): Promise<EscalationResponse> {
+    const body: ResolveEscalationRequest = {
+      resolution_notes: payload.resolution_notes,
+      expected_case_version: payload.expected_case_version,
+      expected_queue_version: payload.expected_queue_version ?? payload.expected_case_version,
+    };
+    return apiFetch<EscalationResponse>(`/escalations/${escalationId}/resolve`, {
       method: 'POST',
-      body: {
-        resolution_notes: resolutionNotes,
-        expected_case_version: expectedCaseVersion,
-      },
+      body,
     });
   },
 };

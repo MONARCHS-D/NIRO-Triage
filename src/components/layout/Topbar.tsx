@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Search,
   Bell,
@@ -11,11 +11,13 @@ import {
   WifiOff,
   RotateCcw,
   Sparkles,
+  Cloud,
 } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
 import { useTriage } from '../../context/TriageContext';
 import { UserRole } from '../../types/roles';
 import { BackendHealthBadge } from '../common/BackendHealthBadge';
+import { SyncOutboxDrawer } from '../common/SyncOutboxDrawer';
 
 export const Topbar: React.FC = () => {
   const {
@@ -28,6 +30,7 @@ export const Topbar: React.FC = () => {
     setIsOffline,
   } = useRole();
   const { searchQuery, setSearchQuery, resetToDefaults } = useTriage();
+  const [showOutbox, setShowOutbox] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-[#E6ECF2] shadow-xs">
@@ -109,6 +112,16 @@ export const Topbar: React.FC = () => {
           {/* Live Backend Health & Database Connectivity Badge */}
           <BackendHealthBadge />
 
+          {/* Offline Outbox Sync Pill */}
+          <button
+            onClick={() => setShowOutbox(true)}
+            title="Open Offline Sync Outbox"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-[#996500] border border-amber-200 transition-colors cursor-pointer"
+          >
+            <Cloud className="w-3.5 h-3.5 text-amber-600" />
+            <span className="hidden sm:inline">3 pending</span>
+          </button>
+
           {/* Offline Mode Toggle Button */}
           <button
             onClick={() => setIsOffline(!isOffline)}
@@ -133,6 +146,9 @@ export const Topbar: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Sync Outbox Sliding Drawer */}
+      <SyncOutboxDrawer open={showOutbox} onClose={() => setShowOutbox(false)} />
     </header>
   );
 };
