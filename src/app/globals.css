@@ -43,3 +43,38 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+@keyframes ocrScan {
+  0% {
+    top: 0%;
+    opacity: 0.9;
+  }
+  50% {
+    top: 98%;
+    opacity: 1;
+  }
+  100% {
+    top: 0%;
+    opacity: 0.9;
+  }
+}
+
+.animate-ocr-scan {
+  animation: ocrScan 2.2s ease-in-out infinite;
+}
+
+/* Compact Blue Dotted Grid Diagonal Wave Animation */
+@keyframes diagonalGridSweep {
+  0% {
+    transform: translate3d(-65%, -65%, 0);
+  }
+  100% {
+    transform: translate3d(65%, 65%, 0);
+  }
+}
+
+.animate-diagonal-sweep {
+  animation: diagonalGridSweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+

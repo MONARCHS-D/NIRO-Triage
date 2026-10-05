@@ -16,7 +16,7 @@ interface ShellLayoutProps {
 
 export const ShellLayout: React.FC<ShellLayoutProps> = ({ children }) => {
   const router = useRouter();
-  const { viewMode, isAuthenticated, isSessionExpired, setIsSessionExpired } = useRole();
+  const { viewMode, setViewMode, setUserRole, isAuthenticated, isSessionExpired, setIsSessionExpired } = useRole();
 
   // Route guard per Section 40
   useEffect(() => {
@@ -31,7 +31,16 @@ export const ShellLayout: React.FC<ShellLayoutProps> = ({ children }) => {
       <div className="min-h-screen bg-slate-100 py-4 px-2 sm:px-4 flex flex-col items-center justify-center">
         <div className="w-full max-w-md mb-2 flex items-center justify-between text-xs text-slate-500 px-2">
           <span>Patient Mobile Triage View</span>
-          <span className="font-mono text-[11px]">390 × 844 viewport</span>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('REVIEWER_DESKTOP');
+              setUserRole('DOCTOR');
+            }}
+            className="text-xs text-[#2563EB] hover:underline font-semibold cursor-pointer"
+          >
+            ← Return to Workstation
+          </button>
         </div>
         <PatientMobileExperience />
       </div>

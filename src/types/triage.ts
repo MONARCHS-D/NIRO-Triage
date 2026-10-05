@@ -131,4 +131,11 @@ export interface Patient {
   reviewNotes?: string;
   escalationReason?: string;
   facilityId: string;
+  version?: number;
+  caseId?: string;
+  draftId?: string;
+  draftVersion?: number;
+  queueVersion?: number;
+  encounterId?: string;
 }
+

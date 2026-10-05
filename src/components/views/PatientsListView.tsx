@@ -6,6 +6,8 @@ import { PriorityBadge, StatusBadge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { Search, Filter, ArrowRight, PlusCircle, Users } from 'lucide-react';
 import { Priority } from '../../types/triage';
+import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
+import { EmptyStateIllustration } from '../illustrations/EmptyStateIllustration';
 
 interface PatientsListViewProps {
   onOpenPatient: (patientId: string) => void;
@@ -34,7 +36,8 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative overflow-hidden">
+      <AppAmbientGrid opacity={0.03} position="top-right" />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#102033]">Patient Directory</h1>
@@ -77,62 +80,74 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
 
       {/* Patient Cards/Table */}
       <div className="bg-white rounded-xl border border-[#E6ECF2] shadow-xs overflow-hidden">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-[#E6ECF2] text-[#6B7B8F] uppercase tracking-wider font-semibold text-[11px] bg-[#F8FAFC]">
-              <th className="py-3 px-4">Patient ID</th>
-              <th className="py-3 px-4">Name & Demographics</th>
-              <th className="py-3 px-4">Primary Language</th>
-              <th className="py-3 px-4">Chief Complaint</th>
-              <th className="py-3 px-4">Priority</th>
-              <th className="py-3 px-4">Status</th>
-              <th className="py-3 px-4 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#E6ECF2]">
-            {filtered.map((p) => (
-              <tr
-                key={p.id}
-                onClick={() => onOpenPatient(p.id)}
-                className="hover:bg-[#F8FAFC] transition-colors cursor-pointer"
-              >
-                <td className="py-3.5 px-4 font-bold text-[#102033] tabular-nums">
-                  {p.id}
-                </td>
-                <td className="py-3.5 px-4">
-                  <div className="font-semibold text-[#102033]">{p.name}</div>
-                  <div className="text-[11px] text-[#6B7B8F]">
-                    {p.age} yrs · {p.gender} · {p.contactMasked}
-                  </div>
-                </td>
-                <td className="py-3.5 px-4 text-[#25364A]">
-                  <span className="font-medium">{p.primaryLanguage}</span>
-                </td>
-                <td className="py-3.5 px-4 text-[#25364A] max-w-xs truncate">
-                  {p.chiefComplaint}
-                </td>
-                <td className="py-3.5 px-4">
-                  <PriorityBadge priority={p.priority} size="sm" />
-                </td>
-                <td className="py-3.5 px-4">
-                  <StatusBadge status={p.status} />
-                </td>
-                <td className="py-3.5 px-4 text-right">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenPatient(p.id);
-                    }}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:text-[#164FD6] bg-[#E8F0FF] hover:bg-blue-100 px-3 py-1.5 rounded transition-colors cursor-pointer"
-                  >
-                    <span>View Note</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
-                </td>
+        {filtered.length === 0 ? (
+          <EmptyStateIllustration
+            title="No Matching Patients"
+            description="No records match your current filter and search criteria."
+            action={
+              <Button variant="primary" size="md" onClick={onNewIntake} icon={<PlusCircle className="w-4 h-4" />}>
+                Start New Intake
+              </Button>
+            }
+          />
+        ) : (
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-[#E6ECF2] text-[#6B7B8F] uppercase tracking-wider font-semibold text-[11px] bg-[#F8FAFC]">
+                <th className="py-3 px-4">Patient ID</th>
+                <th className="py-3 px-4">Name & Demographics</th>
+                <th className="py-3 px-4">Primary Language</th>
+                <th className="py-3 px-4">Chief Complaint</th>
+                <th className="py-3 px-4">Priority</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-[#E6ECF2]">
+              {filtered.map((p) => (
+                <tr
+                  key={p.id}
+                  onClick={() => onOpenPatient(p.id)}
+                  className="hover:bg-[#F8FAFC] transition-colors cursor-pointer"
+                >
+                  <td className="py-3.5 px-4 font-bold text-[#102033] tabular-nums">
+                    {p.id}
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <div className="font-semibold text-[#102033]">{p.name}</div>
+                    <div className="text-[11px] text-[#6B7B8F]">
+                      {p.age} yrs · {p.gender} · {p.contactMasked}
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-4 text-[#25364A]">
+                    <span className="font-medium">{p.primaryLanguage}</span>
+                  </td>
+                  <td className="py-3.5 px-4 text-[#25364A] max-w-xs truncate">
+                    {p.chiefComplaint}
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <PriorityBadge priority={p.priority} size="sm" />
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <StatusBadge status={p.status} />
+                  </td>
+                  <td className="py-3.5 px-4 text-right">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenPatient(p.id);
+                      }}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:text-[#164FD6] bg-[#E8F0FF] hover:bg-blue-100 px-3 py-1.5 rounded transition-colors cursor-pointer"
+                    >
+                      <span>View Note</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

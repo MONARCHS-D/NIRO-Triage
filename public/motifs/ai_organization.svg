@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" fill="none">
+  <!-- Converging information fragments -->
+  <!-- Fragment 1: Voice transcript fragment -->
+  <g opacity="0.85" transform="translate(20, 30)">
+    <rect width="90" height="36" rx="6" fill="#F0F4F8" stroke="#D3DFEC" stroke-width="1.2" />
+    <path d="M16 18h28M16 24h42" stroke="#6B7B8F" stroke-width="2" stroke-linecap="round" />
+    <circle cx="74" cy="18" r="4" fill="#2563EB" opacity="0.6" />
+    <!-- Connector trace to center card -->
+    <path d="M90 18 C 120 18, 120 70, 140 70" stroke="#2563EB" stroke-width="1.2" stroke-dasharray="3 3" stroke-opacity="0.6" />
+  </g>
+
+  <!-- Fragment 2: Clinical Vitals fragment -->
+  <g opacity="0.85" transform="translate(18, 130)">
+    <rect width="90" height="36" rx="6" fill="#F0F4F8" stroke="#D3DFEC" stroke-width="1.2" />
+    <path d="M16 18h36M16 24h24" stroke="#6B7B8F" stroke-width="2" stroke-linecap="round" />
+    <circle cx="74" cy="18" r="4" fill="#087443" opacity="0.6" />
+    <!-- Connector trace to center card -->
+    <path d="M90 18 C 120 18, 120 -30, 140 -25" stroke="#087443" stroke-width="1.2" stroke-dasharray="3 3" stroke-opacity="0.6" />
+  </g>
+
+  <!-- Fragment 3: OCR Extracted parameter -->
+  <g opacity="0.85" transform="translate(200, 30)">
+    <rect width="94" height="36" rx="6" fill="#F0F4F8" stroke="#D3DFEC" stroke-width="1.2" />
+    <path d="M16 18h40M16 24h30" stroke="#6B7B8F" stroke-width="2" stroke-linecap="round" />
+    <circle cx="78" cy="18" r="4" fill="#996500" opacity="0.6" />
+    <!-- Connector trace to center card -->
+    <path d="M0 18 C -30 18, -30 70, -40 70" stroke="#996500" stroke-width="1.2" stroke-dasharray="3 3" stroke-opacity="0.6" />
+  </g>
+
+  <!-- Central Organized Clinical Note / Card -->
+  <g transform="translate(110, 60)">
+    <!-- Soft shadow -->
+    <rect x="2" y="4" width="100" height="120" rx="8" fill="#102033" opacity="0.06" filter="blur(2px)" />
+    <!-- Main Card -->
+    <rect width="100" height="120" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="1.5" />
+    <!-- Header bar -->
+    <rect x="12" y="14" width="45" height="6" rx="3" fill="#2563EB" />
+    <circle cx="82" cy="17" r="4" fill="#087443" />
+    
+    <!-- Organized clinical data lines -->
+    <line x1="12" y1="32" x2="88" y2="32" stroke="#E2E8F0" stroke-width="1.5" />
+    <rect x="12" y="42" width="60" height="4" rx="2" fill="#64748B" />
+    <rect x="12" y="52" width="76" height="4" rx="2" fill="#94A3B8" />
+    <rect x="12" y="62" width="50" height="4" rx="2" fill="#94A3B8" />
+    
+    <line x1="12" y1="76" x2="88" y2="76" stroke="#E2E8F0" stroke-width="1.5" />
+    <rect x="12" y="86" width="40" height="4" rx="2" fill="#64748B" />
+    <rect x="12" y="96" width="68" height="4" rx="2" fill="#CBD5E1" />
+
+    <!-- Tiny restrained 4-point sparkle as secondary detail -->
+    <path d="M94 8 Q94 2 97 2 Q94 2 94 -4 Q94 2 91 2 Q94 2 94 8 Z" fill="#2563EB" opacity="0.9" />
+  </g>
+</svg>

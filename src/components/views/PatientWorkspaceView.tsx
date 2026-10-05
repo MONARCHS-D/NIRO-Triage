@@ -20,6 +20,7 @@ import {
   Sparkles,
   ChevronRight,
 } from 'lucide-react';
+import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
 
 interface PatientWorkspaceViewProps {
   onBackToQueue?: () => void;
@@ -73,7 +74,9 @@ export const PatientWorkspaceView: React.FC<PatientWorkspaceViewProps> = ({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Section 11: Ultra-low opacity peripheral micro grid (2%) far edge only */}
+      <AppAmbientGrid opacity={0.02} position="top-right" />
       {/* Patient Hero Header */}
       <PatientHeader
         patient={selectedPatient}
