@@ -15,14 +15,47 @@ interface EditPatientModalProps {
 export const EditPatientModal: React.FC<EditPatientModalProps> = ({ patient, isOpen, onClose }) => {
   const { updatePatient } = useTriage();
   const [complaint, setComplaint] = useState(patient.chiefComplaint);
-  const [bloodPressure, setBloodPressure] = useState(patient.vitals.bloodPressure || '');
-  const [pulseRate, setPulseRate] = useState(patient.vitals.pulseRate || '');
-  const [temperature, setTemperature] = useState(patient.vitals.temperature || '');
-  const [spO2, setSpO2] = useState(patient.vitals.spO2 || '');
+  const [bloodPressure, setBloodPressure] = useState(
+    patient.vitals.bloodPressure || (patient.vitals.bpSys ? `${patient.vitals.bpSys}/${patient.vitals.bpDia || ''}` : '')
+  );
+  const [pulseRate, setPulseRate] = useState(
+    patient.vitals.pulseRate || (patient.vitals.heartRate ? `${patient.vitals.heartRate} bpm` : '')
+  );
+  const [temperature, setTemperature] = useState(
+    patient.vitals.temperature || (patient.vitals.temp ? `${patient.vitals.temp}°F` : '')
+  );
+  const [spO2, setSpO2] = useState(
+    patient.vitals.spO2 || (patient.vitals.spo2 ? `${patient.vitals.spo2}%` : '')
+  );
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setComplaint(patient.chiefComplaint);
+      setBloodPressure(
+        patient.vitals.bloodPressure || (patient.vitals.bpSys ? `${patient.vitals.bpSys}/${patient.vitals.bpDia || ''}` : '')
+      );
+      setPulseRate(
+        patient.vitals.pulseRate || (patient.vitals.heartRate ? `${patient.vitals.heartRate} bpm` : '')
+      );
+      setTemperature(
+        patient.vitals.temperature || (patient.vitals.temp ? `${patient.vitals.temp}°F` : '')
+      );
+      setSpO2(
+        patient.vitals.spO2 || (patient.vitals.spo2 ? `${patient.vitals.spo2}%` : '')
+      );
+    }
+  }, [isOpen, patient.id, patient.chiefComplaint, patient.vitals]);
 
   if (!isOpen) return null;
 
   const handleSave = () => {
+    const spo2Num = parseInt(spO2.replace(/[^0-9]/g, '')) || patient.vitals.spo2;
+    const hrNum = parseInt(pulseRate.replace(/[^0-9]/g, '')) || patient.vitals.heartRate;
+    const tempNum = parseFloat(temperature.replace(/[^0-9.]/g, '')) || patient.vitals.temp;
+    const bpParts = bloodPressure.split('/');
+    const bpSys = bpParts[0] ? parseInt(bpParts[0].replace(/[^0-9]/g, '')) : patient.vitals.bpSys;
+    const bpDia = bpParts[1] ? parseInt(bpParts[1].replace(/[^0-9]/g, '')) : patient.vitals.bpDia;
+
     updatePatient(patient.id, {
       chiefComplaint: complaint,
       vitals: {
@@ -31,6 +64,11 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({ patient, isO
         pulseRate,
         temperature,
         spO2,
+        spo2: spo2Num,
+        heartRate: hrNum,
+        temp: tempNum,
+        bpSys,
+        bpDia,
       },
     });
     onClose();
@@ -56,8 +94,10 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({ patient, isO
 
         <div className="mt-4 space-y-4 text-xs">
           <div>
-            <label className="block font-semibold text-[#25364A] mb-1">Chief Complaint</label>
+            <label htmlFor="edit-chief-complaint" className="block font-semibold text-[#25364A] mb-1">Chief Complaint</label>
             <textarea
+              id="edit-chief-complaint"
+              name="edit-chief-complaint"
               value={complaint}
               onChange={(e) => setComplaint(e.target.value)}
               rows={3}
@@ -67,8 +107,10 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({ patient, isO
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-[#25364A] mb-1">Blood Pressure</label>
+              <label htmlFor="edit-blood-pressure" className="block font-semibold text-[#25364A] mb-1">Blood Pressure</label>
               <input
+                id="edit-blood-pressure"
+                name="edit-blood-pressure"
                 type="text"
                 value={bloodPressure}
                 onChange={(e) => setBloodPressure(e.target.value)}
@@ -77,8 +119,10 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({ patient, isO
               />
             </div>
             <div>
-              <label className="block font-semibold text-[#25364A] mb-1">Pulse Rate</label>
+              <label htmlFor="edit-pulse-rate" className="block font-semibold text-[#25364A] mb-1">Pulse Rate</label>
               <input
+                id="edit-pulse-rate"
+                name="edit-pulse-rate"
                 type="text"
                 value={pulseRate}
                 onChange={(e) => setPulseRate(e.target.value)}
@@ -87,8 +131,10 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({ patient, isO
               />
             </div>
             <div>
-              <label className="block font-semibold text-[#25364A] mb-1">Body Temperature</label>
+              <label htmlFor="edit-body-temperature" className="block font-semibold text-[#25364A] mb-1">Body Temperature</label>
               <input
+                id="edit-body-temperature"
+                name="edit-body-temperature"
                 type="text"
                 value={temperature}
                 onChange={(e) => setTemperature(e.target.value)}
@@ -97,8 +143,10 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({ patient, isO
               />
             </div>
             <div>
-              <label className="block font-semibold text-[#25364A] mb-1">SpO₂ Oxygen Saturation</label>
+              <label htmlFor="edit-spo2" className="block font-semibold text-[#25364A] mb-1">SpO₂ Oxygen Saturation</label>
               <input
+                id="edit-spo2"
+                name="edit-spo2"
                 type="text"
                 value={spO2}
                 onChange={(e) => setSpO2(e.target.value)}

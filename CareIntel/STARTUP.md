@@ -30,38 +30,34 @@ The ASGI entry point is `careintel.main:app`. API routes are under `/api/v1`.
 
 ## 1. Prerequisites
 
-The documented shell commands assume a POSIX environment such as Linux or macOS. Native Windows
-commands have not been validated and are **REQUIRES MANUAL CONFIGURATION**.
+The repository is validated on both POSIX environments (Linux, macOS) and native Windows (PowerShell / Windows Terminal):
 
 - **Git** is required to clone and update the repository.
 - **Python 3.12.x** is required. `.python-version` specifies `3.12`, and `pyproject.toml` accepts
   Python `>=3.12,<3.13`.
-- **uv** is the canonical dependency and virtual-environment tool because the repository commits
-  `uv.lock`. A pip-only installation is **REQUIRES MANUAL CONFIGURATION** and does not reproduce
-  the lock file by itself.
-- **libmagic** must be available to the operating system. The `python-magic` package uses it for
-  upload MIME detection. Installation is operating-system-specific.
-- **An external PostgreSQL database**, such as Supabase PostgreSQL, is required. The application
-  does not ship or install PostgreSQL.
-- **pgvector** must be available to PostgreSQL. Migration `0007` executes
-  `CREATE EXTENSION IF NOT EXISTS vector`.
-- **An external Redis service** is required for production and for Celery-backed development.
-  The repository does not install Redis.
-- **Azure resources** are required for production: private Blob Storage, an Azure OpenAI-compatible
-  resource with the configured deployments, and Azure Document Intelligence.
-- **curl** is optional but used in the API examples below.
-
-Azure CLI, PostgreSQL CLI, Docker, Gunicorn, and a process supervisor are not repository
-requirements. Docker is not part of this project. Production TLS termination, reverse proxying,
-service supervision, secret injection, and log shipping are **REQUIRES MANUAL CONFIGURATION**.
+- **uv** is the canonical dependency and virtual-environment tool (`py -m pip install uv` on Windows,
+  `curl -LsSf https://astral.sh/uv/install.sh | sh` on POSIX).
+- **libmagic** must be available to the operating system for upload MIME detection.
+- **An external PostgreSQL database**, such as Supabase PostgreSQL, is required with pgvector (`vector(1536)`).
+- **An external Redis service** is required for production and for Celery-backed execution.
+- **Azure resources** are required for production: private Blob Storage, Azure OpenAI, and Azure Document Intelligence.
 
 ## 2. Clone and install
 
+POSIX (Linux / macOS):
 ```bash
 git clone https://github.com/Adi-7i/CareIntel.git
 cd CareIntel
 uv sync --all-extras --frozen
 source .venv/bin/activate
+```
+
+Windows (PowerShell):
+```powershell
+git clone https://github.com/Adi-7i/CareIntel.git
+cd CareIntel
+uv sync
+.\.venv\Scripts\Activate.ps1
 ```
 
 `uv sync` creates `.venv` when needed, installs the package in editable form, installs runtime and
@@ -291,10 +287,16 @@ Do not print `Settings.model_dump()`: it can expose sensitive values despite the
 
 ## 5. PostgreSQL and Supabase setup
 
-Provision an external PostgreSQL database and place its async DSN in `DATABASE_URL`. For Supabase,
-the template uses the direct database connection on port 5432 with `ssl=require`. Connection-mode
-selection is an environment/operator decision; confirm it supports persistent backend connections
-and Alembic DDL.
+Provision an external PostgreSQL database and place its async DSN in `DATABASE_URL`.
+
+### Supabase Connection Modes & IPv4 Networking
+
+Supabase provides two connection paths:
+1. **Direct Connection (`db.<project-ref>.supabase.co:5432`)**: Supabase resolves direct hostnames exclusively via IPv6 `AAAA` records. On networks or operating systems lacking IPv6 route support (such as many local development workstations), direct connection attempts fail with socket resolution errors (`Errno 11001 / gaierror`).
+2. **Regional Connection Pooler (`aws-0-<region>.pooler.supabase.com:5432`)**: Recommended for all IPv4 or dual-stack environments. The pooler supports IPv4 and IPv6. Use session mode on port **5432** (which supports Alembic DDL migrations and prepared statements) with your Supabase project username:
+   ```dotenv
+   DATABASE_URL=postgresql+asyncpg://postgres.<project_ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?ssl=require
+   ```
 
 The migration identity must be allowed to create and alter tables, indexes, functions, triggers,
 and the `vector` extension, or pgvector must already be enabled by the database administrator.
@@ -304,12 +306,18 @@ The schema includes identity, consent, cases, evidence, processing/provenance, s
 knowledge/retrieval, AI drafts and policy decisions, review/handoff, async tasks, outboxes, and
 append-only audit records. Do not create these tables manually.
 
-## 6. Alembic migrations
+## 6. Alembic migrations & Account Seeding
 
 Apply every pending migration to a fresh or existing database:
 
+POSIX:
 ```bash
 .venv/bin/alembic upgrade head
+```
+
+Windows:
+```powershell
+.\.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
 Verify the applied revision:
@@ -318,22 +326,21 @@ Verify the applied revision:
 .venv/bin/alembic current
 ```
 
-Verify that ORM metadata would not generate another migration:
+The current repository head is **`0015`** (`0015_seed_role_permissions.py`). A healthy current database reports `0015 (head)`, and a clean drift check (`alembic check`) reports `No new upgrade operations detected.`
 
+### Seeding Standard Demo Clinician Accounts
+
+Seed the pre-configured role-gated clinician accounts (`doctor`, `nurse`, `cho`, `admin`) with default password `demo123`:
+
+POSIX:
 ```bash
-.venv/bin/alembic check
+.venv/bin/python scripts/seed_demo_accounts.py
 ```
 
-The current repository head is **`0014`**. A healthy current database reports `0014 (head)`, and a
-clean drift check reports `No new upgrade operations detected.`
-
-The drift check may also emit Alembic's warning that the computed default on
-`knowledge_chunks.fts_vector` cannot be modified. The current verified check still exits successfully
-with no upgrade operations; do not hide a different warning or non-zero exit status.
-
-Run migrations before starting API, worker, or dispatcher processes for a new release. Never edit an
-already-applied migration, delete migration history, reset production data, or use `alembic stamp`
-to conceal drift. Create a new migration for a demonstrated schema change.
+Windows:
+```powershell
+.\.venv\Scripts\python.exe scripts/seed_demo_accounts.py
+```
 
 Migration `0010` deliberately deletes old demo embeddings while changing the vector dimension from
 768 to 1,536. Review historical migrations before applying them to a database created from an older
@@ -354,16 +361,29 @@ application transaction
 
 Start a worker from the repository root:
 
+POSIX:
 ```bash
 .venv/bin/celery -A careintel.workers.celery_app:celery_app worker \
   --loglevel=INFO \
   -Q careintel_default,careintel_processing,careintel_retrieval,careintel_ai,careintel_workflow
 ```
 
+Windows (PowerShell):
+```powershell
+# Windows requires '-P solo' as Windows does not support Unix fork()
+.\.venv\Scripts\python.exe -m celery -A careintel.workers.celery_app:celery_app worker -P solo --loglevel=INFO -Q careintel_default,careintel_processing,careintel_retrieval,careintel_ai,careintel_workflow
+```
+
 Start the transactional-outbox dispatcher as a separate long-running process:
 
+POSIX:
 ```bash
 .venv/bin/python -m careintel.workers.outbox_runner --interval 2
+```
+
+Windows (PowerShell):
+```powershell
+.\.venv\Scripts\python.exe -m careintel.workers.outbox_runner --interval 2
 ```
 
 Run one bounded dispatch pass for diagnosis or controlled operation:
@@ -462,16 +482,19 @@ establish multi-speaker diarization quality.
 
 ## 10. Start the FastAPI application
 
-Development:
-
+Development (POSIX):
 ```bash
 .venv/bin/uvicorn careintel.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Production process command:
-
+Production / Local Standard (POSIX):
 ```bash
-.venv/bin/uvicorn careintel.main:app --host 0.0.0.0 --port 8000
+.venv/bin/uvicorn careintel.main:app --host 127.0.0.1 --port 8000
+```
+
+Windows (PowerShell):
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn careintel.main:app --host 127.0.0.1 --port 8000
 ```
 
 Do not use `--reload` in production. `APP_HOST` and `APP_PORT` are application settings but the

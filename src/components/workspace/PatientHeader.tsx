@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Patient } from '../../types/triage';
 import { PriorityBadge, StatusBadge } from '../common/Badge';
 import { Button } from '../common/Button';
@@ -38,8 +38,14 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
   const [showDetailsMenu, setShowDetailsMenu] = useState(false);
   const [hasConflict, setHasConflict] = useState(false);
   const [escalateReason, setEscalateReason] = useState(
-    'Potential respiratory instability observed with borderline SpO₂ 91% and severe tachypnea.'
+    `Acute condition (${patient.chiefComplaint}) requiring senior medical officer evaluation and urgent escalation.`
   );
+
+  useEffect(() => {
+    setEscalateReason(
+      `Acute condition (${patient.chiefComplaint}) requiring senior medical officer evaluation and urgent escalation.`
+    );
+  }, [patient.id, patient.chiefComplaint]);
 
   const handleConfirmEscalate = () => {
     escalatePatientCase(patient.id, escalateReason);
@@ -112,9 +118,7 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
               </span>
 
               {/* Status Badges */}
-              <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                Awaiting review
-              </span>
+              <StatusBadge status={patient.status} />
 
               <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
@@ -122,7 +126,7 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
               </span>
 
               <span className="text-[11px] text-[#6B7B8F] flex items-center gap-1">
-                <Clock className="w-3 h-3" /> Updated 2 min ago
+                <Clock className="w-3 h-3" /> Arrived {patient.triageTime || 'recently'}
               </span>
             </div>
 

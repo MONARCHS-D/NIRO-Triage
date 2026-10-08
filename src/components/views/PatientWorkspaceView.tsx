@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { useTriage } from '../../context/TriageContext';
+import { useRole } from '../../context/RoleContext';
+import { reviewApi } from '../../lib/api/review';
 import { PatientHeader } from '../workspace/PatientHeader';
 import { SummaryTab } from '../workspace/SummaryTab';
 import { TimelineTab } from '../workspace/TimelineTab';
@@ -19,6 +21,8 @@ import {
   Lock,
   Sparkles,
   ChevronRight,
+  RefreshCw,
+  CheckCircle2,
 } from 'lucide-react';
 import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
 
@@ -37,9 +41,66 @@ export type WorkspaceTabKey =
 export const PatientWorkspaceView: React.FC<PatientWorkspaceViewProps> = ({
   onBackToQueue,
 }) => {
-  const { selectedPatient } = useTriage();
+  const { selectedPatient, updatePatient } = useTriage();
+  const { currentUser } = useRole();
   const [activeTab, setActiveTab] = useState<WorkspaceTabKey>('summary');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [workspaceData, setWorkspaceData] = useState<Record<string, any> | null>(null);
+  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+
+  const fetchWorkspace = React.useCallback(async () => {
+    if (!selectedPatient?.caseId) return;
+    setIsLoadingWorkspace(true);
+    setWorkspaceError(null);
+    try {
+      let data: Record<string, any> | null = null;
+      try {
+        data = await reviewApi.getWorkspace(selectedPatient.caseId);
+      } catch (err: any) {
+        // If unassigned or authorization error, attempt auto-assignment if reviewer id is present
+        if (currentUser?.id) {
+          try {
+            await reviewApi.assignReviewer(selectedPatient.caseId, {
+              reviewer_id: currentUser.id,
+              expected_version: selectedPatient.queueVersion || 1,
+            });
+            await reviewApi.startReview(selectedPatient.caseId, {
+              expected_version: (selectedPatient.queueVersion || 1) + 1,
+            });
+            data = await reviewApi.getWorkspace(selectedPatient.caseId);
+          } catch (assignErr) {
+            console.warn('Reviewer auto-assignment note:', assignErr);
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
+
+      if (data) {
+        setWorkspaceData(data);
+        // Sync draft ID and version if available from backend
+        const primaryDraft = data.ai_content?.drafts?.[0];
+        if (primaryDraft && updatePatient) {
+          updatePatient(selectedPatient.id, {
+            draftId: primaryDraft.id,
+            draftVersion: primaryDraft.version,
+            queueVersion: data.queue_item?.version || selectedPatient.queueVersion,
+          });
+        }
+      }
+    } catch (err: any) {
+      console.warn('Backend workspace fetch note:', err?.message || err);
+      setWorkspaceError(err?.message || 'Operating with local triage memory');
+    } finally {
+      setIsLoadingWorkspace(false);
+    }
+  }, [selectedPatient?.caseId, selectedPatient?.id, selectedPatient?.queueVersion, currentUser?.id, updatePatient]);
+
+  React.useEffect(() => {
+    fetchWorkspace();
+  }, [fetchWorkspace]);
 
   if (!selectedPatient) {
     return (
@@ -83,6 +144,46 @@ export const PatientWorkspaceView: React.FC<PatientWorkspaceViewProps> = ({
         onBack={onBackToQueue}
         onOpenEditModal={() => setIsEditModalOpen(true)}
       />
+
+      {/* Backend Engine Sync Status Banner */}
+      <div className="bg-[#F8FAFC] border border-[#E6ECF2] rounded-lg px-4 py-2 flex flex-wrap items-center justify-between text-xs text-[#526276]">
+        <div className="flex items-center gap-2">
+          {workspaceData ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-medium text-[#102033]">
+                CareIntel Workspace Active
+              </span>
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-[#164FD6] border border-blue-200">
+                Case v{workspaceData.case?.version ?? 1} | Queue v{workspaceData.queue_item?.version ?? 1}
+              </span>
+              {workspaceData.ai_content?.drafts?.[0] && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                  AI Draft: {workspaceData.ai_content.drafts[0].reviewer_status}
+                </span>
+              )}
+            </>
+          ) : isLoadingWorkspace ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#2563EB]" />
+              <span>Synchronizing clinical state with CareIntel backend...</span>
+            </>
+          ) : (
+            <>
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              <span>Clinical Workspace (Local Resilient Mode: {workspaceError || 'Offline'})</span>
+            </>
+          )}
+        </div>
+        <button
+          onClick={() => fetchWorkspace()}
+          disabled={isLoadingWorkspace}
+          className="flex items-center gap-1.5 text-xs text-[#2563EB] hover:text-[#164FD6] font-medium transition-colors disabled:opacity-50 cursor-pointer"
+        >
+          <RefreshCw className={`w-3 h-3 ${isLoadingWorkspace ? 'animate-spin' : ''}`} />
+          <span>Refresh Backend Workspace</span>
+        </button>
+      </div>
 
       {/* Hero Workspace Tabs Bar (Section 10) */}
       <div className="border-b border-[#E6ECF2] bg-white rounded-t-xl px-4 sm:px-6 shadow-xs">
@@ -129,19 +230,30 @@ export const PatientWorkspaceView: React.FC<PatientWorkspaceViewProps> = ({
         {activeTab === 'summary' && (
           <SummaryTab
             patient={selectedPatient}
+            workspaceData={workspaceData}
+            onRefreshWorkspace={fetchWorkspace}
             onNavigateToTab={(key) => setActiveTab(key as WorkspaceTabKey)}
           />
         )}
-        {activeTab === 'timeline' && <TimelineTab patient={selectedPatient} />}
-        {activeTab === 'extracted' && <ExtractedDataTab patient={selectedPatient} />}
+        {activeTab === 'timeline' && (
+          <TimelineTab patient={selectedPatient} workspaceData={workspaceData} />
+        )}
+        {activeTab === 'extracted' && (
+          <ExtractedDataTab patient={selectedPatient} workspaceData={workspaceData} />
+        )}
         {activeTab === 'missing' && (
           <MissingInfoTab
             patient={selectedPatient}
+            workspaceData={workspaceData}
             onNavigateToAiQuestions={() => setActiveTab('questions')}
           />
         )}
-        {activeTab === 'questions' && <AiQuestionsTab patient={selectedPatient} />}
-        {activeTab === 'audit' && <AuditLogTab patient={selectedPatient} />}
+        {activeTab === 'questions' && (
+          <AiQuestionsTab patient={selectedPatient} workspaceData={workspaceData} />
+        )}
+        {activeTab === 'audit' && (
+          <AuditLogTab patient={selectedPatient} workspaceData={workspaceData} />
+        )}
       </div>
 
       {/* Edit Details Modal */}

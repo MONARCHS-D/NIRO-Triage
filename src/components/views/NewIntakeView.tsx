@@ -7,6 +7,7 @@ import { VoiceIntakeStudio } from '../intake/VoiceIntakeStudio';
 import { ReportExtractStudio } from '../intake/ReportExtractStudio';
 import { ConsentModal } from '../common/ConsentModal';
 import { useTriage } from '../../context/TriageContext';
+import { useRole } from '../../context/RoleContext';
 import { Patient, Symptom, ExtractedFact } from '../../types/triage';
 import {
   Mic,
@@ -37,7 +38,8 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
   onIntakeCompleted,
   onCancel,
 }) => {
-  const { addPatient } = useTriage();
+  const { addPatient, addOutboxItem } = useTriage();
+  const { currentFacility, isOffline } = useRole();
 
   // Stepper: 1 Patient Info -> 2 Input Details -> 3 Review
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
@@ -47,6 +49,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
   const [name, setName] = useState('Kamala Barik');
   const [age, setAge] = useState('38');
   const [gender, setGender] = useState<'Female' | 'Male' | 'Other'>('Female');
+  const [primaryLanguage, setPrimaryLanguage] = useState<string>('Odia (ଓଡ଼ିଆ)');
   const [contact, setContact] = useState('+91 94371 28912');
   const [consentGranted, setConsentGranted] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
@@ -83,8 +86,14 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
       // 1. Synthetic patient UUID
       const syntheticSubjectId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '3fa85f64-5717-4562-b3fc-2c963f66afa6';
 
-      // 2. Request & Capture Consent
-      const consent = await consentApi.requestAndCapture(syntheticSubjectId, 'data_processing', '1.0');
+      // 2. Request & Capture Consent for both ai_analysis and data_processing
+      const consent = await consentApi.requestAndCapture(syntheticSubjectId, 'ai_analysis', '1.0');
+      try {
+        await consentApi.requestAndCapture(syntheticSubjectId, 'data_processing', '1.0');
+        await consentApi.requestAndCapture(syntheticSubjectId, 'referral', '1.0');
+      } catch (cErr) {
+        // Optional secondary purposes
+      }
 
       // 3. Create Case
       const caseRes = await caseApi.createCase({
@@ -146,7 +155,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
       name,
       age: parseInt(age) || 35,
       gender,
-      primaryLanguage: capturedVoiceData?.language || 'Odia (ଓଡ଼ିଆ)',
+      primaryLanguage: capturedVoiceData?.language || primaryLanguage || 'Odia (ଓଡ଼ିଆ)',
       translatedToEnglish: true,
       contactMasked: contact.replace(/(\d{4})\d{4}(\d{2})/, '$1****$2'),
       visitId: `VST-2026-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -206,10 +215,20 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
       ],
       status: 'PENDING_REVIEW',
       priority: 'YELLOW',
-      facilityId: 'fac-1',
+      facilityId: currentFacility?.id || 'fac-1',
     };
 
     addPatient(newPatient);
+
+    if (isOffline || !backendCaseId) {
+      addOutboxItem({
+        patientId: newId,
+        patientName: name,
+        type: selectedChannel === 'VOICE' ? 'voice' : selectedChannel === 'REPORT' ? 'ocr' : 'text',
+        summary: typedComplaint || capturedVoiceData?.translation || 'New clinical intake registered',
+      });
+    }
+
     onIntakeCompleted(newId);
   };
 
@@ -346,6 +365,21 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                   onChange={(e) => setContact(e.target.value)}
                   className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#25364A] mb-1">Preferred Language / ଭାଷା:</label>
+                <select
+                  value={primaryLanguage}
+                  onChange={(e) => setPrimaryLanguage(e.target.value)}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none bg-white"
+                >
+                  <option value="Odia (ଓଡ଼ିଆ)">Odia (ଓଡ଼ିଆ)</option>
+                  <option value="Hindi (हिन्दी)">Hindi (हिन्दी)</option>
+                  <option value="Bengali (বাংলা)">Bengali (বাংলা)</option>
+                  <option value="Telugu (తెలుగు)">Telugu (తెలుగు)</option>
+                  <option value="English">English</option>
+                </select>
               </div>
             </div>
 

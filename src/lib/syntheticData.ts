@@ -3,7 +3,7 @@ import { Facility, UserProfile } from '../types/roles';
 
 export const INITIAL_FACILITIES: Facility[] = [
   {
-    id: 'fac-1',
+    id: 'a0000000-0000-0000-0000-000000000001',
     name: 'City Community Health Center',
     code: 'CHC-OD-0412',
     type: 'CHC',
@@ -12,7 +12,7 @@ export const INITIAL_FACILITIES: Facility[] = [
     activePatients: 48,
   },
   {
-    id: 'fac-2',
+    id: 'a0000000-0000-0000-0000-000000000002',
     name: 'District Hospital Cuttack',
     code: 'DH-OD-0021',
     type: 'DISTRICT_HOSPITAL',
@@ -21,7 +21,7 @@ export const INITIAL_FACILITIES: Facility[] = [
     activePatients: 114,
   },
   {
-    id: 'fac-3',
+    id: 'a0000000-0000-0000-0000-000000000003',
     name: 'PHC Chandpur Rural Clinic',
     code: 'PHC-OD-0108',
     type: 'PHC',
@@ -30,7 +30,7 @@ export const INITIAL_FACILITIES: Facility[] = [
     activePatients: 19,
   },
   {
-    id: 'fac-4',
+    id: 'a0000000-0000-0000-0000-000000000004',
     name: 'Bhubaneswar Industrial Health Unit',
     code: 'IHU-OD-0089',
     type: 'INDUSTRIAL_HEALTH_UNIT',
@@ -376,7 +376,7 @@ export const INITIAL_PATIENTS: Patient[] = [
     ],
     status: 'PENDING_REVIEW',
     priority: 'RED',
-    facilityId: 'fac-1',
+    facilityId: 'a0000000-0000-0000-0000-000000000001',
   },
   {
     id: 'P-1035',
@@ -544,7 +544,7 @@ export const INITIAL_PATIENTS: Patient[] = [
     ],
     status: 'NEEDS_MORE_INFO',
     priority: 'YELLOW',
-    facilityId: 'fac-1',
+    facilityId: 'a0000000-0000-0000-0000-000000000001',
   },
   {
     id: 'P-1018',
@@ -690,6 +690,6 @@ export const INITIAL_PATIENTS: Patient[] = [
     ],
     status: 'PENDING_REVIEW',
     priority: 'GREEN',
-    facilityId: 'fac-1',
+    facilityId: 'a0000000-0000-0000-0000-000000000001',
   },
 ];

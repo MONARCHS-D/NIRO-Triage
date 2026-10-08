@@ -118,6 +118,12 @@ export interface Patient {
     temperature?: string;
     spO2?: string;
     respiratoryRate?: string;
+    spo2?: number;
+    heartRate?: number;
+    temp?: number;
+    respRate?: number;
+    bpSys?: number;
+    bpDia?: number;
   };
   facts: ExtractedFact[];
   missingInfo: MissingInformationItem[];
@@ -137,5 +143,10 @@ export interface Patient {
   draftVersion?: number;
   queueVersion?: number;
   encounterId?: string;
+  lastReviewedAt?: string;
+  triageTime?: string;
+  clinicalSummary?: string;
+  intakeSource?: string;
+  assignedTriageLevel?: number | string;
 }
 

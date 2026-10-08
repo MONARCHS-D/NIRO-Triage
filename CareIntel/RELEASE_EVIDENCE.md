@@ -413,3 +413,23 @@ referral, recipient acknowledgement, completion, and audit reconstruction.
 This decision is limited to the verified configuration and workflows recorded
 above. It is not a certification, does not eliminate the known limitations, and
 does not turn unexecuted fixture matrices or capacity claims into passes.
+
+## 15. Post-R8 Live Verification & NIRO-Triage Frontend Integration
+
+**Execution Date:** 2026-10-08  
+**Environment:** Windows Server / PowerShell & Node.js 20+  
+**Target Architecture:** Dual-stack Frontend (`NIRO-Triage` Next.js 16) + Backend (`CareIntel` FastAPI 0.115+)
+
+### Observed Results
+
+| Verification Test | Executed Command | Result |
+| :--- | :--- | :--- |
+| **Alembic Migrations** | `python -m alembic current` | `0015 (head)` — All 15 migrations applied cleanly |
+| **Supabase IPv4 Pooler** | `scripts/verify_infra.py` | `PASS` — HNSW cosine index, `vector(1536)` confirmed |
+| **Redis Cloud** | `scripts/verify_infra.py` | `PASS` — Latency ~672ms |
+| **Celery Broker** | `scripts/verify_infra.py` | `PASS` — Broker connected |
+| **Azure Blob Storage** | `scripts/verify_infra.py` | `PASS` — Upload, integrity, SAS generation, cleanup |
+| **Live Auth Cycle** | `scripts/verify_auth_live.py` | `PASS` — 7/7 checks passed (JWT issue, profile, revocation) |
+| **Clinician Seeding** | `scripts/seed_demo_accounts.py` | `PASS` — doctor, nurse, cho, admin accounts seeded |
+| **Next.js Health Probe** | `/api/v1/health/ready` | `HTTP 200` — `status: ready`, latency ~1868ms |
+

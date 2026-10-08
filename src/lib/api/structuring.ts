@@ -65,7 +65,7 @@ export const structuringApi = {
    * Get overall structuring counts and summary status.
    */
   async getStructuringSummary(caseId: string): Promise<StructuringSummaryResponse> {
-    return apiFetch<StructuringSummaryResponse>(`/cases/${caseId}/structuring-summary`, {
+    return apiFetch<StructuringSummaryResponse>(`/cases/${caseId}/summary`, {
       method: 'GET',
     });
   },

@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   Hospital,
   LogOut,
+  FileText,
+  BarChart3,
 } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
 
@@ -25,13 +27,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
   const pathname = usePathname();
   const { currentUser, currentFacility, logout } = useRole();
 
-  // Section 33: Must-build MVP Navigation items
+  // Navigation items
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/intake', label: 'New Intake', icon: PlusCircle },
     { href: '/intake/voice', label: 'Voice Intake', icon: Mic },
     { href: '/queue', label: 'Triage Queue', icon: Inbox },
     { href: '/patients', label: 'Patients', icon: Users },
+    { href: '/reports', label: 'Clinical Reports', icon: FileText },
+    { href: '/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
@@ -57,7 +61,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
         </div>
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href));
+          const isActive =
+            item.href === '/dashboard' || item.href === '/intake'
+              ? pathname === item.href
+              : pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href + '/'));
           return (
             <Link
               key={item.href}

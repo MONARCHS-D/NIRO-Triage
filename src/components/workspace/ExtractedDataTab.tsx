@@ -19,9 +19,10 @@ import { useTriage } from '../../context/TriageContext';
 
 interface ExtractedDataTabProps {
   patient: Patient;
+  workspaceData?: Record<string, any> | null;
 }
 
-export const ExtractedDataTab: React.FC<ExtractedDataTabProps> = ({ patient }) => {
+export const ExtractedDataTab: React.FC<ExtractedDataTabProps> = ({ patient, workspaceData }) => {
   const { editFactValue } = useTriage();
   const [editingFactId, setEditingFactId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -39,9 +40,25 @@ export const ExtractedDataTab: React.FC<ExtractedDataTabProps> = ({ patient }) =
     setEditingFactId(null);
   };
 
+  // Flatten candidates from backend processing runs
+  const backendCandidates: Array<{
+    candidate_id: string;
+    field_type: string;
+    value: string;
+    status: string;
+    provenance?: any;
+  }> = [];
+
+  const processingRuns: any[] = workspaceData?.derived_information?.processing || [];
+  processingRuns.forEach((run) => {
+    if (Array.isArray(run.extracted_candidates)) {
+      backendCandidates.push(...run.extracted_candidates);
+    }
+  });
+
   return (
-    <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs">
-      <div className="flex flex-wrap items-center justify-between pb-4 mb-6 border-b border-[#E6ECF2] gap-3">
+    <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-6">
+      <div className="flex flex-wrap items-center justify-between pb-4 border-b border-[#E6ECF2] gap-3">
         <div>
           <h3 className="text-base font-bold text-[#102033]">Structured Extracted Facts & Provenance</h3>
           <p className="text-xs text-[#6B7B8F]">
@@ -52,8 +69,39 @@ export const ExtractedDataTab: React.FC<ExtractedDataTabProps> = ({ patient }) =
           <span className="text-xs font-semibold px-2.5 py-1 rounded bg-blue-50 text-[#164FD6] border border-blue-200">
             {patient.facts.length} Verified Facts
           </span>
+          {backendCandidates.length > 0 && (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded bg-purple-50 text-purple-700 border border-purple-200">
+              {backendCandidates.length} Backend Candidates
+            </span>
+          )}
         </div>
       </div>
+
+      {backendCandidates.length > 0 && (
+        <div className="p-4 rounded-xl bg-purple-50/40 border border-purple-200">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-purple-900 mb-2">
+            CareIntel Extraction Pipeline Candidates
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+            {backendCandidates.map((c) => (
+              <div
+                key={c.candidate_id}
+                className="p-2.5 bg-white rounded-lg border border-purple-100 flex items-center justify-between gap-2"
+              >
+                <div>
+                  <span className="font-semibold text-[#102033] block capitalize">
+                    {c.field_type.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-[#25364A] font-mono text-[11px]">{c.value}</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-100 text-purple-700">
+                  {c.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Facts Table */}
       <div className="overflow-x-auto">

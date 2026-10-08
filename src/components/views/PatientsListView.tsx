@@ -55,7 +55,10 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
         <div className="relative flex-1 max-w-sm">
           <Search className="w-4 h-4 text-[#6B7B8F] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
+            id="patients-search"
+            name="patients-search"
             type="text"
+            aria-label="Search patients by name, ID, or symptoms"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by name, ID, or symptoms..."
@@ -71,7 +74,7 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
             className="text-xs py-1.5 px-3 rounded-md border border-[#E6ECF2] bg-white text-[#25364A] cursor-pointer"
           >
             <option value="ALL">All Priorities</option>
-            <option value="RED">High Priority (Red)</option>
+            <option value="RED">Urgent Review (Red)</option>
             <option value="YELLOW">Prompt Review (Yellow)</option>
             <option value="GREEN">Routine Review (Green)</option>
           </select>

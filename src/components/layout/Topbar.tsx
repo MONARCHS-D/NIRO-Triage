@@ -29,8 +29,9 @@ export const Topbar: React.FC = () => {
     isOffline,
     setIsOffline,
   } = useRole();
-  const { searchQuery, setSearchQuery, resetToDefaults } = useTriage();
+  const { searchQuery, setSearchQuery, resetToDefaults, outbox } = useTriage();
   const [showOutbox, setShowOutbox] = useState(false);
+  const pendingSyncCount = outbox ? outbox.filter((i) => i.status !== 'synced').length : 0;
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-[#E6ECF2] shadow-xs">
@@ -58,7 +59,10 @@ export const Topbar: React.FC = () => {
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7B8F]" />
           <input
+            id="global-patient-search"
+            name="global-patient-search"
             type="text"
+            aria-label="Search patient name, ID, or chief complaint"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search patient name, ID (e.g. P-1042), chief complaint..."
@@ -116,10 +120,16 @@ export const Topbar: React.FC = () => {
           <button
             onClick={() => setShowOutbox(true)}
             title="Open Offline Sync Outbox"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-[#996500] border border-amber-200 transition-colors cursor-pointer"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold border transition-colors cursor-pointer ${
+              pendingSyncCount > 0
+                ? 'bg-amber-50 hover:bg-amber-100 text-[#996500] border-amber-200'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+            }`}
           >
-            <Cloud className="w-3.5 h-3.5 text-amber-600" />
-            <span className="hidden sm:inline">3 pending</span>
+            <Cloud className={`w-3.5 h-3.5 ${pendingSyncCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+            <span className="hidden sm:inline">
+              {pendingSyncCount > 0 ? `${pendingSyncCount} pending` : 'Synced'}
+            </span>
           </button>
 
           {/* Offline Mode Toggle Button */}

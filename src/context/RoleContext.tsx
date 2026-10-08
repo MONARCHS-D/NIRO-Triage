@@ -66,14 +66,22 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
           const profile = await authApi.getMe();
           if (profile && profile.id) {
             setIsAuthenticated(true);
-            // Map backend role to frontend role if available
+            setIsOffline(false);
+            // Map backend role to frontend role if available and store backend user UUID
             const backendRole = profile.roles?.[0]?.toUpperCase();
             if (backendRole && users.some((u) => u.role === backendRole)) {
               setUserRole(backendRole as UserRole);
             }
+            setCurrentUser((prev) => ({
+              ...prev,
+              id: profile.id,
+            }));
           }
-        } catch (e) {
+        } catch (e: any) {
           console.warn('Backend session verification failed, falling back to local storage:', e);
+          if (e?.code === 'NETWORK_ERROR') {
+            setIsOffline(true);
+          }
           const stored = localStorage.getItem(AUTH_STORAGE_KEY);
           if (stored === 'true') {
             setIsAuthenticated(true);
@@ -102,7 +110,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     };
   }, [setUserRole, users]);
 
-  const login = async (staffIdOrEmail: string, password = 'password123'): Promise<boolean> => {
+  const login = async (staffIdOrEmail: string, password = 'demo123'): Promise<boolean> => {
     if (!staffIdOrEmail || staffIdOrEmail.trim().length === 0) {
       return false;
     }
@@ -112,16 +120,31 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       const email = staffIdOrEmail.includes('@') ? staffIdOrEmail : `${staffIdOrEmail}@careintel.local`;
       await authApi.login({ email, password });
       setIsOffline(false);
-    } catch (e) {
+
+      // Retrieve backend profile and capture actual user UUID
+      try {
+        const profile = await authApi.getMe();
+        if (profile && profile.id) {
+          setCurrentUser((prev) => ({
+            ...prev,
+            id: profile.id,
+          }));
+        }
+      } catch {
+        // Non-fatal
+      }
+    } catch (e: any) {
       console.warn('Backend login endpoint unavailable or rejected, using prototype mode:', e);
-      setIsOffline(true);
+      if (e?.code === 'NETWORK_ERROR') {
+        setIsOffline(true);
+      }
     }
 
     // Role mapping for UI layout
     const lower = staffIdOrEmail.toLowerCase();
-    if (lower.includes('nurse') || lower.includes('sunita')) {
+    if (lower.includes('nurse') || lower.includes('sunita') || lower.includes('maya')) {
       setUserRole('NURSE');
-    } else if (lower.includes('cho') || lower.includes('ramesh') || lower.includes('health')) {
+    } else if (lower.includes('cho') || lower.includes('ramesh') || lower.includes('rajesh') || lower.includes('health')) {
       setUserRole('HEALTH_WORKER');
     } else if (lower.includes('patient')) {
       setUserRole('PATIENT');

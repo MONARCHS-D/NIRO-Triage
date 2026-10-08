@@ -3,7 +3,15 @@
  */
 
 import { apiFetch } from './client';
-import { CaseHistoryResponse, CaseResponse, CreateCaseRequest, TransitionRequest } from './types';
+import {
+  CaseHistoryResponse,
+  CaseResponse,
+  CreateCaseRequest,
+  CreateEncounterRequest,
+  EncounterListResponse,
+  EncounterResponse,
+  TransitionRequest,
+} from './types';
 
 export const caseApi = {
   /**
@@ -40,6 +48,25 @@ export const caseApi = {
    */
   async getCaseHistory(caseId: string): Promise<CaseHistoryResponse> {
     return apiFetch<CaseHistoryResponse>(`/cases/${caseId}/history`, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Create an encounter record for a case.
+   */
+  async createEncounter(caseId: string, payload: CreateEncounterRequest): Promise<EncounterResponse> {
+    return apiFetch<EncounterResponse>(`/cases/${caseId}/encounters`, {
+      method: 'POST',
+      body: payload,
+    });
+  },
+
+  /**
+   * List all encounters recorded for a case.
+   */
+  async listEncounters(caseId: string): Promise<EncounterListResponse> {
+    return apiFetch<EncounterListResponse>(`/cases/${caseId}/encounters`, {
       method: 'GET',
     });
   },

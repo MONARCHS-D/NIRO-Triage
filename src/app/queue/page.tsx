@@ -6,13 +6,25 @@ import { ShellLayout } from '../../components/layout/ShellLayout';
 import { useTriage } from '../../context/TriageContext';
 import { PriorityBadge, StatusBadge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
-import { ArrowRight, PlusCircle, Filter } from 'lucide-react';
+import { ArrowRight, PlusCircle, Filter, RefreshCw } from 'lucide-react';
 import { AppAmbientGrid } from '../../components/motifs/AppAmbientGrid';
 import { EmptyStateIllustration } from '../../components/illustrations/EmptyStateIllustration';
 
 export default function QueuePage() {
   const router = useRouter();
-  const { patients, priorityFilter, setPriorityFilter, searchQuery, setSelectedPatientId } = useTriage();
+  const {
+    patients,
+    priorityFilter,
+    setPriorityFilter,
+    searchQuery,
+    setSelectedPatientId,
+    refreshCases,
+    isSyncing,
+  } = useTriage();
+
+  React.useEffect(() => {
+    refreshCases();
+  }, [refreshCases]);
 
   const filteredPatients = patients.filter((p) => {
     if (priorityFilter === 'RED' && p.priority !== 'RED') return false;
@@ -47,9 +59,20 @@ export default function QueuePage() {
               Live facility cases categorized by clinical review priority
             </p>
           </div>
-          <Button variant="primary" size="md" onClick={() => router.push('/intake')} icon={<PlusCircle className="w-4 h-4" />}>
-            Start New Intake
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => refreshCases()}
+              disabled={isSyncing}
+              icon={<RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />}
+            >
+              {isSyncing ? 'Refreshing...' : 'Refresh'}
+            </Button>
+            <Button variant="primary" size="md" onClick={() => router.push('/intake')} icon={<PlusCircle className="w-4 h-4" />}>
+              Start New Intake
+            </Button>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl border border-[#E6ECF2] shadow-xs overflow-hidden">
@@ -71,7 +94,7 @@ export default function QueuePage() {
                 }`}
               >
                 <span className="w-2 h-2 rounded-full bg-red-600" />
-                High Priority ({patients.filter((p) => p.priority === 'RED').length})
+                Urgent Review ({patients.filter((p) => p.priority === 'RED').length})
               </button>
               <button
                 onClick={() => setPriorityFilter('YELLOW')}
@@ -80,7 +103,7 @@ export default function QueuePage() {
                 }`}
               >
                 <span className="w-2 h-2 rounded-full bg-amber-500" />
-                Medium ({patients.filter((p) => p.priority === 'YELLOW').length})
+                Prompt Review ({patients.filter((p) => p.priority === 'YELLOW').length})
               </button>
               <button
                 onClick={() => setPriorityFilter('GREEN')}
@@ -89,7 +112,7 @@ export default function QueuePage() {
                 }`}
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Low ({patients.filter((p) => p.priority === 'GREEN').length})
+                Routine Review ({patients.filter((p) => p.priority === 'GREEN').length})
               </button>
             </div>
             <div className="text-xs text-[#6B7B8F]">

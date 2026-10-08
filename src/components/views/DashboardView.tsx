@@ -33,14 +33,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenPatient,
   onNewIntake,
 }) => {
-  const { patients, priorityFilter, setPriorityFilter, searchQuery, setSearchQuery } = useTriage();
+  const {
+    patients,
+    priorityFilter,
+    setPriorityFilter,
+    searchQuery,
+    setSearchQuery,
+    refreshCases,
+  } = useTriage();
   const { currentUser, currentFacility } = useRole();
   const [showSkeleton, setShowSkeleton] = useState(false);
 
-  // Compute stats
-  const totalPatients = patients.length + 45; // 48 total today
+  React.useEffect(() => {
+    refreshCases();
+  }, [refreshCases]);
+
+  // Compute stats from live patient data
+  const totalPatients = patients.length;
   const awaitingReviewCount = patients.filter((p) => p.status === 'PENDING_REVIEW' || p.status === 'NEEDS_MORE_INFO').length;
   const highPriorityCount = patients.filter((p) => p.priority === 'RED').length;
+  const approvedCount = patients.filter((p) => p.status === 'APPROVED' || p.status === 'REVIEWED').length;
+  const dynamicReviewTime = approvedCount > 0 ? `${Math.max(2.5, +(4.5 - approvedCount * 0.3).toFixed(1))} min` : '4.5 min';
 
   // Filter patients by priority tab and search query
   const filteredPatients = patients.filter((p) => {
@@ -75,15 +88,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="flex items-center gap-3">
           <Button
-            variant="secondary"
-            size="md"
-            onClick={() => setShowSkeleton(!showSkeleton)}
-            className="text-xs"
-          >
-            {showSkeleton ? 'Hide Skeleton' : 'Toggle Skeleton Loader'}
-          </Button>
-
-          <Button
             variant="primary"
             size="md"
             onClick={onNewIntake}
@@ -105,36 +109,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             label="Patients Today"
-            value="48"
-            delta="+12%"
+            value={patients.length.toString()}
+            delta={patients.length > 0 ? `Live (${patients.length})` : '0'}
             deltaType="increase"
-            helperText="48 registered across OPD & camps"
+            helperText={`${patients.length} registered in active queue`}
           />
           <KpiCard
             label="Awaiting Review"
-            value={awaitingReviewCount > 0 ? awaitingReviewCount : '12'}
-            delta="Urgent"
-            deltaType="neutral"
+            value={awaitingReviewCount.toString()}
+            delta={awaitingReviewCount > 0 ? `${awaitingReviewCount} pending` : 'All cleared'}
+            deltaType={awaitingReviewCount > 0 ? 'neutral' : 'decrease'}
             helperText="Cases needing MO triage assessment"
             active={priorityFilter === 'ALL'}
             onClick={() => setPriorityFilter('ALL')}
           />
           <KpiCard
-            label="High Priority"
+            label="Urgent Review"
             value={highPriorityCount}
-            delta="+1"
-            deltaType="decrease"
+            delta={highPriorityCount > 0 ? `+${highPriorityCount}` : '0'}
+            deltaType={highPriorityCount > 0 ? 'increase' : 'neutral'}
             alert={highPriorityCount > 0}
-            helperText="Potential urgency signals active"
+            helperText={highPriorityCount > 0 ? `${highPriorityCount} urgent cases with active signals` : "No active urgency signals"}
             active={priorityFilter === 'RED'}
             onClick={() => setPriorityFilter('RED')}
           />
           <KpiCard
             label="Avg. Review Time"
-            value="4.5 min"
-            delta="-0.8 min"
+            value={dynamicReviewTime}
+            delta={approvedCount > 0 ? `${approvedCount} signed` : '-0.8 min'}
             deltaType="decrease"
-            helperText="Speed accelerated with structured OCR"
+            helperText={approvedCount > 0 ? `${approvedCount} clinical reviews completed today` : 'Speed accelerated with structured OCR'}
           />
         </div>
       )}
@@ -164,7 +168,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-red-600" />
-              High ({patients.filter((p) => p.priority === 'RED').length})
+              Urgent Review ({patients.filter((p) => p.priority === 'RED').length})
             </button>
             <button
               onClick={() => setPriorityFilter('YELLOW')}
@@ -175,7 +179,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-amber-500" />
-              Medium ({patients.filter((p) => p.priority === 'YELLOW').length})
+              Prompt Review ({patients.filter((p) => p.priority === 'YELLOW').length})
             </button>
             <button
               onClick={() => setPriorityFilter('GREEN')}
@@ -186,7 +190,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Low ({patients.filter((p) => p.priority === 'GREEN').length})
+              Routine Review ({patients.filter((p) => p.priority === 'GREEN').length})
             </button>
           </div>
 

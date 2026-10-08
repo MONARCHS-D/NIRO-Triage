@@ -22,6 +22,7 @@ import {
 import { Button } from '../common/Button';
 import { SAMPLE_REPORTS, ReportDocument } from '../../lib/ocrSimulator';
 import { ExtractedFact } from '../../types/triage';
+import { useTriage } from '../../context/TriageContext';
 
 interface ReportExtractStudioProps {
   initialReport?: ReportDocument;
@@ -32,6 +33,7 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
   initialReport = SAMPLE_REPORTS[0],
   onFactsExtracted,
 }) => {
+  const { selectedPatient } = useTriage();
   const [selectedDoc, setSelectedDoc] = useState<ReportDocument>(initialReport);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
@@ -41,6 +43,75 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
   const [tempValue, setTempValue] = useState<string>('');
   const [isSimulatingOcrFailure, setIsSimulatingOcrFailure] = useState<boolean>(false);
   const [isScanning, setIsScanning] = useState<boolean>(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    const previewUrl = URL.createObjectURL(file);
+    const customDoc: ReportDocument = {
+      id: `custom-${Date.now()}`,
+      name: file.name,
+      patientId: selectedPatient?.id || initialReport.patientId || 'P-1042',
+      type: file.type.includes('pdf') ? 'CBC' : 'PRESCRIPTION',
+      pagesCount: 1,
+      uploadDate: 'Today · Just now',
+      fileSizeBytes: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+      facts: [
+        {
+          id: `fact-upload-1`,
+          category: 'LAB_CBC',
+          name: 'Hemoglobin',
+          value: '11.8',
+          unit: 'g/dL',
+          referenceRange: '12.0 - 15.5 g/dL',
+          sourceDocument: file.name,
+          sourcePage: 1,
+          sourceLocation: 'Uploaded File Header Section',
+          confidence: 'HIGH',
+          confidenceScore: 0.94,
+        },
+        {
+          id: `fact-upload-2`,
+          category: 'LAB_CBC',
+          name: 'Total Leukocyte Count (WBC)',
+          value: '11,400',
+          unit: '/µL',
+          referenceRange: '4,000 - 11,000 /µL',
+          sourceDocument: file.name,
+          sourcePage: 1,
+          sourceLocation: 'Uploaded File Differential Count',
+          confidence: 'HIGH',
+          confidenceScore: 0.96,
+        },
+        {
+          id: `fact-upload-3`,
+          category: 'VITALS',
+          name: 'Blood Pressure',
+          value: '126/82',
+          unit: 'mmHg',
+          referenceRange: '120/80 mmHg',
+          sourceDocument: file.name,
+          sourcePage: 1,
+          sourceLocation: 'Clinical Notes',
+          confidence: 'HIGH',
+          confidenceScore: 0.91,
+        },
+      ],
+    };
+
+    setTimeout(() => {
+      setSelectedDoc(customDoc);
+      setFacts(customDoc.facts);
+      setHighlightedFactId(customDoc.facts[0]?.id || null);
+      setIsScanning(false);
+      if (onFactsExtracted) {
+        onFactsExtracted(customDoc.facts);
+      }
+    }, 1200);
+  };
 
   const triggerScan = () => {
     setIsScanning(true);
@@ -114,6 +185,23 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
               </option>
             ))}
           </select>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/*,.pdf"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-[#2563EB] bg-blue-50 text-[#164FD6] font-semibold hover:bg-blue-100 transition-colors cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Upload File</span>
+          </button>
 
           <button
             type="button"
@@ -283,7 +371,12 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
                 </div>
                 <div className="text-[9px] text-slate-600">DEPARTMENT OF PATHOLOGY & BIOCHEMISTRY</div>
                 <div className="mt-2 flex justify-between text-[9px] text-slate-700 border-t border-dotted border-slate-400 pt-1">
-                  <span>PATIENT: P-1042 (28/F)</span>
+                  <span>
+                    PATIENT:{' '}
+                    {selectedPatient
+                      ? `${selectedPatient.id} (${selectedPatient.age}/${selectedPatient.gender?.[0] || 'U'})`
+                      : selectedDoc.patientId || 'P-1042 (28/F)'}
+                  </span>
                   <span>DATE: 12 AUG 2026</span>
                 </div>
               </div>

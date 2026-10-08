@@ -474,12 +474,14 @@ Then open <http://127.0.0.1:8000/api/docs>.
 Set `REDIS_URL`, then start a worker for the queues represented in the dispatcher:
 
 ```bash
+# Celery worker (add '-P solo' on Windows)
 uv run celery -A careintel.workers.celery_app:celery_app worker \
   --loglevel=INFO \
   -Q careintel_default,careintel_processing,careintel_retrieval,careintel_ai,careintel_workflow
-```
 
-A continuously running `UnifiedOutboxDispatcher` must also be hosted by an application process; the repository currently provides the dispatcher class but no dedicated CLI entry point for it.
+# Continuous transactional-outbox dispatcher
+uv run python -m careintel.workers.outbox_runner --interval 2
+```
 
 ---
 

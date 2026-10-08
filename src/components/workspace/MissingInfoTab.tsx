@@ -15,16 +15,24 @@ import { useTriage } from '../../context/TriageContext';
 
 interface MissingInfoTabProps {
   patient: Patient;
+  workspaceData?: Record<string, any> | null;
   onNavigateToAiQuestions?: () => void;
 }
 
 export const MissingInfoTab: React.FC<MissingInfoTabProps> = ({
   patient,
+  workspaceData,
   onNavigateToAiQuestions,
 }) => {
   const { resolveMissingInfo } = useTriage();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [customInput, setCustomInput] = useState<string>('');
+
+  const backendMissing: Array<{
+    id: string;
+    requirement_key: string;
+    status: string;
+  }> = workspaceData?.derived_information?.missing_information || [];
 
   const handleQuickResolve = (item: MissingInformationItem, option: string) => {
     resolveMissingInfo(patient.id, item.id, option);
@@ -40,8 +48,8 @@ export const MissingInfoTab: React.FC<MissingInfoTabProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs max-w-4xl">
-      <div className="flex flex-wrap items-center justify-between pb-4 mb-6 border-b border-[#E6ECF2] gap-3">
+    <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs max-w-4xl space-y-6">
+      <div className="flex flex-wrap items-center justify-between pb-4 border-b border-[#E6ECF2] gap-3">
         <div>
           <h3 className="text-base font-bold text-[#102033]">
             Information Needed for Safer Review
@@ -62,6 +70,29 @@ export const MissingInfoTab: React.FC<MissingInfoTabProps> = ({
           </Button>
         )}
       </div>
+
+      {backendMissing.length > 0 && (
+        <div className="p-4 rounded-xl bg-amber-50/40 border border-amber-200">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-2">
+            CareIntel Protocol Checklist Gaps
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {backendMissing.map((m) => (
+              <div
+                key={m.id}
+                className="p-2.5 bg-white rounded-lg border border-amber-200 flex items-center justify-between"
+              >
+                <span className="font-semibold text-[#102033] capitalize">
+                  {m.requirement_key.replace(/_/g, ' ')}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800">
+                  {m.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {patient.missingInfo.length === 0 ? (
         <div className="p-8 text-center rounded-xl bg-emerald-50/50 border border-emerald-200">

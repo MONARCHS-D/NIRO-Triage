@@ -482,3 +482,101 @@ export interface TextToSpeechRequest {
   voice?: string | null;
 }
 
+// ── Advisory AI ─────────────────────────────────────────────────────────────
+export type AITaskType =
+  | 'triage_advisory'
+  | 'evidence_summary'
+  | 'missing_info_suggestion'
+  | 'clarification_generation'
+  | string;
+
+export interface ExecuteAdvisoryRequest {
+  retrieval_run_id: string;
+  task_type: AITaskType;
+}
+
+export interface ValidationErrorResponse {
+  step: string;
+  code: string;
+  detail: string;
+}
+
+export interface ClaimProvenanceResponse {
+  claim_text: string;
+  status: string;
+  supporting_source_ids: string[];
+}
+
+export interface AIDraftResponse {
+  draft_id: string;
+  ai_run_id: string;
+  content: Record<string, any>;
+  validation_status: string;
+  validation_errors: ValidationErrorResponse[];
+  claim_provenance: ClaimProvenanceResponse[];
+  reviewer_status: string;
+  reviewer_id?: string | null;
+  reviewed_at?: string | null;
+  created_at: string;
+}
+
+// ── Knowledge Retrieval ─────────────────────────────────────────────────────
+export type SearchMode = 'HYBRID' | 'DENSE' | 'SPARSE' | string;
+
+export interface RetrievalRequest {
+  query: string;
+  corpus_version?: string;
+  search_mode?: SearchMode;
+  top_k?: number;
+}
+
+export interface RetrievalCandidateResponse {
+  candidate_id: string;
+  retrieval_run_id: string;
+  source_type: string;
+  source_id: string;
+  rank: number;
+  dense_score?: number | null;
+  sparse_score?: number | null;
+  fusion_score?: number | null;
+  citation_locator?: string | null;
+}
+
+export interface RetrievalMetadataResponse {
+  retrieval_run_id: string;
+  query_hash: string;
+  search_mode: SearchMode;
+  corpus_version?: string | null;
+  embedding_version_key?: string | null;
+  applied_filters: Record<string, string>;
+  candidate_count: number;
+  status: string;
+  zero_result_reason?: string | null;
+  created_at: string;
+}
+
+export interface RetrievalResponse {
+  metadata: RetrievalMetadataResponse;
+  candidates: RetrievalCandidateResponse[];
+}
+
+// ── Encounters ──────────────────────────────────────────────────────────────
+export interface CreateEncounterRequest {
+  encounter_type: string;
+  occurred_at: string;
+  notes?: string | null;
+}
+
+export interface EncounterResponse {
+  encounter_id: string;
+  case_id: string;
+  encounter_type: string;
+  occurred_at: string;
+  notes?: string | null;
+}
+
+export interface EncounterListResponse {
+  case_id: string;
+  encounters: EncounterResponse[];
+}
+

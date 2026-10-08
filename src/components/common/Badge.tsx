@@ -20,7 +20,7 @@ export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, size = '
       return (
         <span className={`inline-flex items-center rounded border border-red-200 bg-[#FDECEC] text-[#B3261E] ${sizeClasses}`}>
           {showIcon && <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-[#B3261E]" />}
-          <span>Potential Urgency</span>
+          <span>Urgent Review</span>
         </span>
       );
     case 'YELLOW':
