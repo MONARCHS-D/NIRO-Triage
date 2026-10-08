@@ -5,11 +5,15 @@ import { useRouter } from 'next/navigation';
 import { ShellLayout } from '../../../components/layout/ShellLayout';
 import { VoiceIntakeStudio } from '../../../components/intake/VoiceIntakeStudio';
 import { useTriage } from '../../../context/TriageContext';
+import { useRole } from '../../../context/RoleContext';
+import { useNotifications } from '../../../context/NotificationContext';
 import { Patient } from '../../../types/triage';
 
 export default function VoiceIntakePage() {
   const router = useRouter();
   const { addPatient, setSelectedPatientId } = useTriage();
+  const { currentFacility, currentUser } = useRole();
+  const { notifyArrival } = useNotifications();
 
   const handleVoiceComplete = (data: {
     language: string;
@@ -59,15 +63,15 @@ export default function VoiceIntakePage() {
           title: `Voice recorded in ${data.language}`,
           description: data.translation,
           source: 'VOICE',
-          actor: 'Patient Ranjan Mahapatra',
+          actor: 'Patient (Voice Recording)',
         },
       ],
       auditLog: [
         {
           id: `aud-voice-1`,
           timestamp: 'Just now',
-          actor: 'Dr. A. Sharma',
-          actorRole: 'Medical Officer',
+          actor: currentUser?.name || 'Triage Officer',
+          actorRole: currentUser?.role || 'Medical Officer',
           action: 'REGISTER_VOICE_INTAKE',
           objectAffected: newId,
           details: `Captured ${data.language} voice intake`,
@@ -75,10 +79,23 @@ export default function VoiceIntakePage() {
       ],
       status: 'PENDING_REVIEW',
       priority: 'YELLOW',
-      facilityId: 'fac-1',
+      facilityId: currentFacility?.id || 'fac-1',
     };
 
     addPatient(newPatient);
+
+    notifyArrival({
+      patientId: newId,
+      patientName: newPatient.name,
+      patientAge: newPatient.age,
+      patientGender: newPatient.gender,
+      department: 'Voice Studio / OPD',
+      priority: newPatient.priority,
+      chiefComplaint: newPatient.chiefComplaint,
+      vitalsSnippet: `BP: ${newPatient.vitals.bloodPressure} · SpO2: ${newPatient.vitals.spO2}`,
+      facilityName: currentFacility?.name || 'Nuapada District Hospital',
+    });
+
     setSelectedPatientId(newId);
     router.push(`/patients/${newId}`);
   };

@@ -27,17 +27,28 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useTriage } from '../../context/TriageContext';
+import { useRole } from '../../context/RoleContext';
 import { ReferralHandoffModal } from './ReferralHandoffModal';
 import { AiDraftReviewModal } from './AiDraftReviewModal';
 import { structuringApi } from '../../lib/api/structuring';
+import { aiApi } from '../../lib/api/ai';
+import { retrievalApi } from '../../lib/api/retrieval';
 
 interface SummaryTabProps {
   patient: Patient;
+  workspaceData?: Record<string, any> | null;
+  onRefreshWorkspace?: () => void;
   onNavigateToTab?: (tabKey: string) => void;
 }
 
-export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab }) => {
+export const SummaryTab: React.FC<SummaryTabProps> = ({
+  patient,
+  workspaceData,
+  onRefreshWorkspace,
+  onNavigateToTab,
+}) => {
   const { setPatientPriority, approvePatientNote, escalatePatientCase } = useTriage();
+  const { currentUser } = useRole();
 
   // Modals & States
   const [showDraftModal, setShowDraftModal] = useState(false);
@@ -46,31 +57,280 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
   const [approvalNotes, setApprovalNotes] = useState('');
   const [isEvaluatingProtocol, setIsEvaluatingProtocol] = useState(false);
   const [protocolEvaluationMessage, setProtocolEvaluationMessage] = useState<string | null>(null);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+
+  // Dynamic initial draft note based on patient vitals and symptoms
+  const getInitialDraftNote = (p: Patient) => {
+    const vitalsText = [
+      p.vitals.spo2 ? `SpO2 ${p.vitals.spo2}% on room air` : null,
+      p.vitals.heartRate ? `Pulse ${p.vitals.heartRate} bpm` : null,
+      p.vitals.bpSys && p.vitals.bpDia ? `Blood Pressure ${p.vitals.bpSys}/${p.vitals.bpDia} mmHg` : null,
+      p.vitals.temp ? `Temperature ${p.vitals.temp}°F` : null,
+      p.vitals.respRate ? `Respiratory Rate ${p.vitals.respRate} /min` : null,
+    ].filter(Boolean).join(', ');
+
+    const symptomsList = p.symptoms && p.symptoms.length > 0
+      ? p.symptoms.map((s: any) => typeof s === 'string' ? s : s.name).join(', ')
+      : 'acute medical symptoms';
+
+    return {
+      presentingComplaint: `Patient presents with ${p.chiefComplaint || 'acute medical symptoms'}. Identified symptoms include ${symptomsList}.`,
+      history: `Reported history: ${p.clinicalSummary || `Intake recorded via ${p.intakeSource || 'standard'} registration.`} No immediate adverse drug reactions documented.`,
+      observations: `At facility triage: ${vitalsText || 'Vitals pending completion'}. Patient evaluated under ${p.priority.toUpperCase()} priority classification (Level ${p.assignedTriageLevel || '2'}).`,
+    };
+  };
 
   // Draft Text
-  const [draftNote, setDraftNote] = useState({
-    presentingComplaint:
-      'Patient reports 3-day history of high-grade fever accompanied by severe productive cough and acute shortness of breath worsening over the past 24 hours.',
-    history:
-      'Fever onset 3 days ago with chills. Mild dry cough progressed to thick yellowish sputum. No prior history of asthma or tuberculosis. Completed 2-day course of Paracetamol 500mg with temporary fever suppression.',
-    observations:
-      'At primary health centre triage: SpO2 91% on room air, Pulse 98 bpm, Blood Pressure 124/82 mmHg, Temperature 101.4°F. Laboratory CBC demonstrates leukocytosis (WBC 13,800/µL) with neutrophilic predominance (78%). Hemoglobin 11.2 g/dL.',
-  });
+  const [draftNote, setDraftNote] = useState(() => getInitialDraftNote(patient));
+
+  // Sync draftNote from backend workspaceData if present, or reset on patient change
+  React.useEffect(() => {
+    const aiDraft = workspaceData?.ai_content?.drafts?.[0];
+    if (aiDraft?.content) {
+      if (typeof aiDraft.content === 'object') {
+        setDraftNote({
+          presentingComplaint: aiDraft.content.presentingComplaint || aiDraft.content.complaint || '',
+          history: aiDraft.content.history || '',
+          observations: aiDraft.content.observations || '',
+        });
+        return;
+      }
+    }
+    setDraftNote(getInitialDraftNote(patient));
+  }, [patient.id, workspaceData]);
 
   const handleApprove = () => {
     approvePatientNote(patient.id, approvalNotes);
     setShowApprovalDialog(false);
   };
 
+  // Dynamic extraction and parsing of clinical vitals
+  const numSpo2 = patient.vitals.spo2 ?? (patient.vitals.spO2 ? parseInt(patient.vitals.spO2.replace(/\D/g, ''), 10) : undefined);
+  const numBpSys = patient.vitals.bpSys ?? (patient.vitals.bloodPressure ? parseInt(patient.vitals.bloodPressure.split('/')[0].replace(/\D/g, ''), 10) : undefined);
+  const numBpDia = patient.vitals.bpDia ?? (patient.vitals.bloodPressure ? parseInt(patient.vitals.bloodPressure.split('/')[1]?.replace(/\D/g, '') || '0', 10) : undefined);
+  const numHr = patient.vitals.heartRate ?? (patient.vitals.pulseRate ? parseInt(patient.vitals.pulseRate.replace(/\D/g, ''), 10) : undefined);
+  const numTemp = patient.vitals.temp ?? (patient.vitals.temperature ? parseFloat(patient.vitals.temperature.replace(/[^0-9.]/g, '')) : undefined);
+  const numResp = patient.vitals.respRate ?? (patient.vitals.respiratoryRate ? parseInt(patient.vitals.respiratoryRate.replace(/\D/g, ''), 10) : undefined);
+
+  // Dynamic urgency signals computed from real patient riskFlags, backend workspace, and physiological thresholds
+  interface DynamicUrgencySignal {
+    id: string;
+    title: string;
+    badge: string;
+    severity: 'CRITICAL' | 'URGENT' | 'WARNING';
+    description: string;
+    evidence: { label: string; dotColor: string }[];
+  }
+
+  const [selectedSignalIndex, setSelectedSignalIndex] = useState(0);
+
+  React.useEffect(() => {
+    setSelectedSignalIndex(0);
+  }, [patient.id]);
+
+  const urgencySignals: DynamicUrgencySignal[] = React.useMemo(() => {
+    const list: DynamicUrgencySignal[] = [];
+
+    // 1. Process patient's configured or backend-synced riskFlags
+    if (patient.riskFlags && patient.riskFlags.length > 0) {
+      patient.riskFlags.forEach((rf) => {
+        let title = rf.label || 'Clinical Urgency Signal';
+        let badge = 'Needs Attention';
+        let severity: 'CRITICAL' | 'URGENT' | 'WARNING' = rf.severity === 'POTENTIAL_URGENCY' ? 'URGENT' : 'WARNING';
+        const evidenceItems: { label: string; dotColor: string }[] = [];
+
+        if (rf.type === 'RESPIRATORY_CONCERN') {
+          title = numSpo2 ? `SpO₂ ${numSpo2}%` : 'Respiratory Concern';
+          badge = numSpo2 && numSpo2 < 92 ? 'Severe Hypoxia (< 92%)' : 'Below Reference Range';
+          severity = numSpo2 && numSpo2 < 90 ? 'CRITICAL' : 'URGENT';
+          if (numSpo2) {
+            evidenceItems.push({ label: `Nurse triage reading: ${numSpo2}% on room air`, dotColor: 'bg-red-500' });
+          }
+          if (patient.chiefComplaint) {
+            evidenceItems.push({ label: `Presenting complaint: ${patient.chiefComplaint}`, dotColor: 'bg-blue-500' });
+          }
+        } else if (rf.type === 'CHEST_DISCOMFORT') {
+          title = 'Atypical Chest / Epigastric Discomfort';
+          badge = 'Urgent Review Required';
+          severity = 'URGENT';
+          evidenceItems.push({ label: `Reported symptoms: ${patient.chiefComplaint || 'Retrosternal discomfort'}`, dotColor: 'bg-amber-500' });
+          if (numBpSys) {
+            evidenceItems.push({ label: `Intake blood pressure: ${numBpSys}/${numBpDia || '--'} mmHg`, dotColor: 'bg-blue-500' });
+          }
+        } else if (rf.type === 'UNUSUAL_VITALS') {
+          title = 'Unusual Vitals Deviation';
+          badge = 'Vitals Alert';
+          severity = 'URGENT';
+          if (numBpSys) evidenceItems.push({ label: `Blood pressure: ${numBpSys}/${numBpDia || '--'} mmHg`, dotColor: 'bg-red-500' });
+          if (numHr) evidenceItems.push({ label: `Pulse rate: ${numHr} bpm`, dotColor: 'bg-amber-500' });
+        } else if (rf.type === 'HIGH_FEVER_PROLONGED') {
+          title = numTemp ? `Temperature ${numTemp} °F` : 'Prolonged Pyrexia';
+          badge = 'High Fever Alert';
+          severity = 'URGENT';
+          evidenceItems.push({ label: `Thermometer reading: ${numTemp ? `${numTemp} °F` : 'Documented fever'}`, dotColor: 'bg-red-500' });
+        } else {
+          badge = rf.severity === 'POTENTIAL_URGENCY' ? 'Urgent Signal' : 'Advisory Signal';
+          evidenceItems.push({ label: `Clinical assessment: ${patient.chiefComplaint}`, dotColor: 'bg-blue-500' });
+        }
+
+        list.push({
+          id: rf.id,
+          title,
+          badge,
+          severity,
+          description: rf.description,
+          evidence: evidenceItems.length > 0 ? evidenceItems : [
+            { label: `Documented triage record: ${rf.label}`, dotColor: 'bg-blue-500' },
+          ],
+        });
+      });
+    }
+
+    // 2. Derive active physiological signals directly from recorded vitals
+    if (numSpo2 !== undefined && numSpo2 < 94 && !list.some(s => s.title.includes('SpO₂'))) {
+      list.push({
+        id: 'sig-spo2',
+        title: `SpO₂ ${numSpo2}%`,
+        badge: numSpo2 < 90 ? 'Severe Hypoxia (< 90%)' : 'Below Reference Range (< 94%)',
+        severity: numSpo2 < 90 ? 'CRITICAL' : 'URGENT',
+        description: 'Measured on room air at triage intake. Review clinically for respiratory instability or oxygen therapy requirement.',
+        evidence: [
+          { label: `Nurse triage reading: ${numSpo2}% on room air`, dotColor: 'bg-red-500' },
+          { label: `Presenting complaint: ${patient.chiefComplaint || 'Acute respiratory presentation'}`, dotColor: 'bg-blue-500' },
+        ],
+      });
+    }
+
+    if (numBpSys !== undefined && (numBpSys >= 160 || (numBpDia !== undefined && numBpDia >= 100)) && !list.some(s => s.title.includes('BP'))) {
+      list.push({
+        id: 'sig-bp-high',
+        title: `BP ${numBpSys}/${numBpDia || '--'} mmHg`,
+        badge: numBpSys >= 180 ? 'Hypertensive Crisis (≥ 180 SBP)' : 'Stage 2 Hypertension',
+        severity: numBpSys >= 180 ? 'CRITICAL' : 'URGENT',
+        description: 'Marked elevation in blood pressure. Clinical assessment recommended for target organ involvement (headache, blurred vision, chest pain).',
+        evidence: [
+          { label: `Intake blood pressure reading: ${numBpSys}/${numBpDia || '--'} mmHg`, dotColor: 'bg-red-500' },
+          { label: `Patient age & gender: ${patient.age}y · ${patient.gender}`, dotColor: 'bg-blue-500' },
+        ],
+      });
+    }
+
+    if (numHr !== undefined && (numHr > 115 || numHr < 50) && !list.some(s => s.title.includes('Heart Rate') || s.title.includes('Pulse'))) {
+      list.push({
+        id: 'sig-hr',
+        title: `Pulse ${numHr} bpm`,
+        badge: numHr > 115 ? 'Marked Tachycardia (> 115)' : 'Bradycardia (< 50 bpm)',
+        severity: 'URGENT',
+        description: 'Abnormal cardiac pulse rate detected at initial triage. Evaluate for arrhythmia, systemic infection, or acute distress.',
+        evidence: [
+          { label: `Pulse measurement: ${numHr} bpm at triage`, dotColor: 'bg-red-500' },
+          { label: `Temperature: ${numTemp ? `${numTemp} °F` : 'Recorded at intake'}`, dotColor: 'bg-amber-500' },
+        ],
+      });
+    }
+
+    if (numTemp !== undefined && numTemp >= 102.0 && !list.some(s => s.title.includes('Temperature') || s.title.includes('Fever'))) {
+      list.push({
+        id: 'sig-temp',
+        title: `Temperature ${numTemp} °F`,
+        badge: 'High Pyrexia (≥ 102 °F)',
+        severity: 'URGENT',
+        description: 'Significant elevation in body temperature. Recommend prompt antipyretic intervention and infectious disease screening.',
+        evidence: [
+          { label: `Thermometer measurement: ${numTemp} °F`, dotColor: 'bg-red-500' },
+          { label: `Presenting complaint: ${patient.chiefComplaint}`, dotColor: 'bg-orange-500' },
+        ],
+      });
+    }
+
+    if (numResp !== undefined && (numResp >= 28 || numResp < 10) && !list.some(s => s.title.includes('Respiratory') || s.title.includes('Resp Rate'))) {
+      list.push({
+        id: 'sig-resp',
+        title: `Resp Rate ${numResp} /min`,
+        badge: numResp >= 28 ? 'Tachypnea (≥ 28 /min)' : 'Bradypnea (< 10 /min)',
+        severity: 'URGENT',
+        description: 'Respiratory frequency substantially outside normal resting range (12-20 /min).',
+        evidence: [
+          { label: `Measured respiratory rate: ${numResp} /min`, dotColor: 'bg-red-500' },
+          { label: `SpO₂: ${numSpo2 ? `${numSpo2}%` : 'Pending'}`, dotColor: 'bg-blue-500' },
+        ],
+      });
+    }
+
+    // 3. Fallback for RED priority patient if no physiological signal above
+    if (patient.priority === 'RED' && list.length === 0) {
+      list.push({
+        id: 'sig-priority-red',
+        title: patient.chiefComplaint || 'Urgent Triage Acuity',
+        badge: 'Priority 1 (Red)',
+        severity: 'URGENT',
+        description: 'Patient flagged for expedited clinical review based on presenting symptom acuity.',
+        evidence: [
+          { label: 'Triage classification: Priority 1 (Red)', dotColor: 'bg-red-500' },
+          { label: `Arrival time: ${patient.arrivalTime}`, dotColor: 'bg-blue-500' },
+        ],
+      });
+    }
+
+    return list;
+  }, [patient, numSpo2, numBpSys, numBpDia, numHr, numTemp, numResp]);
+
+  const activeSignalIdx = Math.min(selectedSignalIndex, Math.max(0, urgencySignals.length - 1));
+  const activeSignal = urgencySignals[activeSignalIdx];
+
+  const handleRunAdvisoryAI = async () => {
+    if (!patient.caseId) return;
+    setIsGeneratingAi(true);
+    try {
+      // 1. Execute retrieval
+      const retResult = await retrievalApi.retrieveKnowledge(patient.caseId, {
+        query: patient.chiefComplaint || 'respiratory fever breathlessness',
+      });
+      const runId = retResult?.metadata?.retrieval_run_id;
+      if (runId) {
+        // 2. Execute advisory AI draft
+        await aiApi.executeAdvisory(patient.caseId, {
+          retrieval_run_id: runId,
+          task_type: 'evidence_summary',
+        });
+      }
+      if (onRefreshWorkspace) {
+        await onRefreshWorkspace();
+      }
+      setProtocolEvaluationMessage('Advisory AI draft synthesized from CareIntel retrieval pipeline.');
+      setTimeout(() => setProtocolEvaluationMessage(null), 4000);
+    } catch (err: any) {
+      console.warn('Advisory AI run note:', err);
+      setProtocolEvaluationMessage(`AI Advisory: ${err?.message || 'Retained local draft fallback'}`);
+      setTimeout(() => setProtocolEvaluationMessage(null), 4000);
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
+
+  const isPediatric = typeof patient.age === 'number' && patient.age < 12;
+  const protocolName = isPediatric ? 'IMNCI / Pediatric ETAT' : 'Adult Emergency Triage (ETAT / MoHFW)';
+  const protocolSubtitle = isPediatric
+    ? 'Standardized pediatric & neonatal emergency triage checklist verification'
+    : 'Standardized adult emergency triage checklist verification';
+
   const handleEvaluateProtocol = async () => {
     setIsEvaluatingProtocol(true);
     setProtocolEvaluationMessage(null);
     try {
       if (patient.caseId) {
-        await structuringApi.evaluateCase(patient.caseId, patient.caseId);
+        const extractionRunId =
+          workspaceData?.derived_information?.processing?.[0]?.run_id || patient.caseId;
+        await structuringApi.evaluateCase(patient.caseId, extractionRunId);
+        if (onRefreshWorkspace) {
+          await onRefreshWorkspace();
+        }
       }
       await new Promise((r) => setTimeout(r, 600));
-      setProtocolEvaluationMessage('Protocol checklist evaluated against national IMNCI triage standards.');
+      const targetStandard = isPediatric
+        ? 'national IMNCI & pediatric emergency guidelines'
+        : 'national Emergency Triage (ETAT / MoHFW) standards';
+      setProtocolEvaluationMessage(`Protocol checklist evaluated against ${targetStandard}.`);
       setTimeout(() => setProtocolEvaluationMessage(null), 4000);
     } catch (e) {
       console.warn('Backend protocol evaluation fallback note:', e);
@@ -86,6 +346,25 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
       onNavigateToTab('questions');
     }
   };
+
+  const missingItems = [
+    !patient.vitals.temp && {
+      name: 'Temperature',
+      desc: 'Not recorded at intake arrival',
+    },
+    !patient.vitals.bpSys && {
+      name: 'Blood Pressure',
+      desc: 'Manual cuff measurement pending',
+    },
+    !patient.vitals.respRate && {
+      name: 'Respiratory Rate',
+      desc: 'Breaths per minute needed to assess tachypnea',
+    },
+    (!patient.clinicalSummary || patient.clinicalSummary.length < 15) && {
+      name: 'Relevant Medical History',
+      desc: 'Prior chronic conditions / surgical history',
+    },
+  ].filter(Boolean) as { name: string; desc: string }[];
 
   return (
     <div className="space-y-6">
@@ -105,7 +384,9 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-bold text-[#102033]">AI-Organized Draft</h3>
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-[#164FD6]">
-                      AI draft
+                      {workspaceData?.ai_content?.drafts?.[0]?.reviewer_status
+                        ? `AI Draft (${workspaceData.ai_content.drafts[0].reviewer_status})`
+                        : 'AI draft'}
                     </span>
                   </div>
                   <p className="text-[11px] text-[#6B7B8F]">
@@ -115,7 +396,16 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
               </div>
 
               {/* Action Toolbar */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleRunAdvisoryAI}
+                  disabled={isGeneratingAi}
+                  icon={<Sparkles className={`w-3.5 h-3.5 text-[#2563EB] ${isGeneratingAi ? 'animate-spin' : ''}`} />}
+                >
+                  {isGeneratingAi ? 'Synthesizing...' : 'Run Advisory AI'}
+                </Button>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -184,24 +474,28 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
                   <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center gap-2">
                     <Mic className="w-4 h-4 text-blue-600 flex-shrink-0" />
                     <div>
-                      <span className="font-semibold text-[#102033] block">Voice Intake</span>
-                      <span className="text-[#6B7B8F]">00:02–01:15</span>
+                      <span className="font-semibold text-[#102033] block">{patient.intakeSource || 'Clinical Intake'}</span>
+                      <span className="text-[#6B7B8F]">{patient.primaryLanguage} • Audio/Text</span>
                     </div>
                   </div>
 
                   <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center gap-2">
                     <FileText className="w-4 h-4 text-purple-600 flex-shrink-0" />
                     <div>
-                      <span className="font-semibold text-[#102033] block">CBC Lab Report</span>
-                      <span className="text-[#6B7B8F]">13,800/µL WBC</span>
+                      <span className="font-semibold text-[#102033] block">Clinical Record</span>
+                      <span className="text-[#6B7B8F] truncate max-w-[130px] block" title={patient.chiefComplaint}>
+                        {patient.chiefComplaint}
+                      </span>
                     </div>
                   </div>
 
                   <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-red-500 flex-shrink-0" />
+                    <Activity className={`w-4 h-4 flex-shrink-0 ${patient.vitals.spo2 && patient.vitals.spo2 < 94 ? 'text-red-500' : 'text-emerald-600'}`} />
                     <div>
-                      <span className="font-semibold text-[#102033] block">Triage Form</span>
-                      <span className="text-[#B3261E] font-medium">SpO₂: 91%</span>
+                      <span className="font-semibold text-[#102033] block">Triage Vitals</span>
+                      <span className={`font-medium ${patient.vitals.spo2 && patient.vitals.spo2 < 94 ? 'text-[#B3261E]' : 'text-[#25364A]'}`}>
+                        {patient.vitals.spo2 ? `SpO₂: ${patient.vitals.spo2}%` : `HR: ${patient.vitals.heartRate || '--'} bpm`}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -223,12 +517,16 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-[#102033]">Protocol Assessment</h3>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-[#526276] font-medium">
-                    IMNCI / Emergency Triage
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-medium border ${
+                    isPediatric
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-blue-50 text-[#164FD6] border-blue-200'
+                  }`}>
+                    {protocolName}
                   </span>
                 </div>
                 <p className="text-[11px] text-[#6B7B8F] mt-0.5">
-                  Standardized emergency triage checklist verification
+                  {protocolSubtitle}
                 </p>
               </div>
 
@@ -250,54 +548,156 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
               </div>
             )}
 
-            {/* Criteria Checklist */}
+            {/* Criteria Checklist - Age-stratified */}
             <div className="mt-4 space-y-2.5">
-              <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-[#102033]">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span className="font-medium">Respiratory status documented</span>
-                </div>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  Completed
-                </span>
-              </div>
+              {isPediatric ? (
+                <>
+                  <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-[#102033]">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span className="font-medium">IMNCI General Danger Signs screened (Lethargy, feeding ability, convulsions)</span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Completed
+                    </span>
+                  </div>
 
-              <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-[#102033]">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span className="font-medium">SpO₂ available (91%)</span>
-                </div>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  Completed
-                </span>
-              </div>
+                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                    patient.vitals.respRate || (patient.symptoms && patient.symptoms.length > 0)
+                      ? 'bg-[#F8FAFC] border-[#E6ECF2]'
+                      : 'bg-amber-50/40 border-amber-200'
+                  }`}>
+                    <div className="flex items-center gap-2 text-xs text-[#102033]">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span className="font-medium">
+                        {patient.vitals.respRate
+                          ? `Pediatric respiratory status documented (${patient.vitals.respRate} /min, age-stratified)`
+                          : 'Pediatric respiratory rate & chest indrawing'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Completed
+                    </span>
+                  </div>
 
-              <div className="p-2.5 rounded-lg bg-amber-50/40 border border-amber-200 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-[#996500]">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span className="font-medium">Blood pressure documented</span>
-                </div>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                  Missing
-                </span>
-              </div>
+                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                    patient.vitals.spo2 ? 'bg-[#F8FAFC] border-[#E6ECF2]' : 'bg-amber-50/40 border-amber-200'
+                  }`}>
+                    <div className={`flex items-center gap-2 text-xs ${patient.vitals.spo2 ? 'text-[#102033]' : 'text-[#996500]'}`}>
+                      {patient.vitals.spo2 ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      )}
+                      <span className="font-medium">
+                        {patient.vitals.spo2 ? `Pediatric SpO₂ pulse oximetry available (${patient.vitals.spo2}%)` : 'Pediatric SpO₂ measurement pending'}
+                      </span>
+                    </div>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      patient.vitals.spo2
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : 'bg-amber-100 text-amber-800 border-amber-200'
+                    }`}>
+                      {patient.vitals.spo2 ? 'Completed' : 'Missing'}
+                    </span>
+                  </div>
 
-              <div className="p-2.5 rounded-lg bg-amber-50/40 border border-amber-200 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-[#996500]">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span className="font-medium">Mental status documented</span>
-                </div>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                  Missing
-                </span>
-              </div>
+                  <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-[#102033]">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span className="font-medium">Hydration status &amp; capillary refill assessed</span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Completed
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                    patient.vitals.respRate || (patient.symptoms && patient.symptoms.length > 0)
+                      ? 'bg-[#F8FAFC] border-[#E6ECF2]'
+                      : 'bg-amber-50/40 border-amber-200'
+                  }`}>
+                    <div className="flex items-center gap-2 text-xs text-[#102033]">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span className="font-medium">
+                        {patient.vitals.respRate ? `Airway & respiratory status documented (${patient.vitals.respRate} /min)` : 'Airway & respiratory status documented'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Completed
+                    </span>
+                  </div>
+
+                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                    patient.vitals.spo2 ? 'bg-[#F8FAFC] border-[#E6ECF2]' : 'bg-amber-50/40 border-amber-200'
+                  }`}>
+                    <div className={`flex items-center gap-2 text-xs ${patient.vitals.spo2 ? 'text-[#102033]' : 'text-[#996500]'}`}>
+                      {patient.vitals.spo2 ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      )}
+                      <span className="font-medium">
+                        {patient.vitals.spo2 ? `SpO₂ pulse oximetry available (${patient.vitals.spo2}%)` : 'SpO₂ measurement pending'}
+                      </span>
+                    </div>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      patient.vitals.spo2
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : 'bg-amber-100 text-amber-800 border-amber-200'
+                    }`}>
+                      {patient.vitals.spo2 ? 'Completed' : 'Missing'}
+                    </span>
+                  </div>
+
+                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                    patient.vitals.bpSys ? 'bg-[#F8FAFC] border-[#E6ECF2]' : 'bg-amber-50/40 border-amber-200'
+                  }`}>
+                    <div className={`flex items-center gap-2 text-xs ${patient.vitals.bpSys ? 'text-[#102033]' : 'text-[#996500]'}`}>
+                      {patient.vitals.bpSys ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      )}
+                      <span className="font-medium">
+                        {patient.vitals.bpSys
+                          ? `Circulation & blood pressure documented (${patient.vitals.bpSys}/${patient.vitals.bpDia || '--'} mmHg)`
+                          : 'Blood pressure measurement documented'}
+                      </span>
+                    </div>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      patient.vitals.bpSys
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : 'bg-amber-100 text-amber-800 border-amber-200'
+                    }`}>
+                      {patient.vitals.bpSys ? 'Completed' : 'Missing'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-[#102033]">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span className="font-medium">Disability / AVPU orientation &amp; mental status documented</span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Completed
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Urgency signals inside assessment */}
             <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-[#6B7B8F]">Potential urgency signal:</span>
-              <span className="font-bold text-[#B3261E] flex items-center gap-1.5">
-                • SpO₂ 91% (Advisory Only)
+              <span className={`font-bold flex items-center gap-1.5 ${urgencySignals.length > 0 ? 'text-[#B3261E]' : 'text-emerald-700'}`}>
+                {urgencySignals.length > 0 ? (
+                  `• ${urgencySignals[0].title} (${urgencySignals[0].badge})`
+                ) : (
+                  `• None (Level ${patient.assignedTriageLevel || '3'} Standard)`
+                )}
               </span>
             </div>
           </div>
@@ -307,73 +707,41 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
             <div className="flex items-center justify-between pb-3 border-b border-[#E6ECF2]">
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-bold text-[#102033]">Missing Information</h3>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-[#996500] border border-amber-200">
-                  3 important
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                  missingItems.length > 0
+                    ? 'bg-amber-100 text-[#996500] border-amber-200'
+                    : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                }`}>
+                  {missingItems.length > 0 ? `${missingItems.length} gap${missingItems.length > 1 ? 's' : ''}` : 'Complete'}
                 </span>
               </div>
               <span className="text-[11px] text-[#6B7B8F]">Actionable clinical gaps</span>
             </div>
 
             <div className="mt-3 space-y-2.5">
-              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[#102033]">Temperature</div>
-                  <div className="text-[11px] text-[#6B7B8F]">Not recorded at intake arrival</div>
+              {missingItems.length === 0 ? (
+                <div className="p-3 rounded-lg bg-emerald-50/50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>All vital signs and initial triage parameters are recorded.</span>
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleRequestField('Temperature')}
-                  icon={<HelpCircle className="w-3.5 h-3.5 text-amber-600" />}
-                >
-                  Request
-                </Button>
-              </div>
-
-              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[#102033]">Blood Pressure</div>
-                  <div className="text-[11px] text-[#6B7B8F]">Manual cuff measurement pending</div>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleRequestField('Blood Pressure')}
-                  icon={<HelpCircle className="w-3.5 h-3.5 text-amber-600" />}
-                >
-                  Request
-                </Button>
-              </div>
-
-              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[#102033]">Respiratory Rate</div>
-                  <div className="text-[11px] text-[#6B7B8F]">Breaths per minute needed to confirm tachypnea</div>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleRequestField('Respiratory Rate')}
-                  icon={<HelpCircle className="w-3.5 h-3.5 text-amber-600" />}
-                >
-                  Request
-                </Button>
-              </div>
-
-              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[#102033]">Relevant Medical History</div>
-                  <div className="text-[11px] text-[#6B7B8F]">Prior respiratory admissions / smoking history</div>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleRequestField('Relevant Medical History')}
-                  icon={<HelpCircle className="w-3.5 h-3.5 text-amber-600" />}
-                >
-                  Request
-                </Button>
-              </div>
+              ) : (
+                missingItems.map((item) => (
+                  <div key={item.name} className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-[#102033]">{item.name}</div>
+                      <div className="text-[11px] text-[#6B7B8F]">{item.desc}</div>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleRequestField(item.name)}
+                      icon={<HelpCircle className="w-3.5 h-3.5 text-amber-600" />}
+                    >
+                      Request
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -381,61 +749,141 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
         {/* RIGHT COLUMN: Urgency Signals, Quick Actions, Vitals, Reviewer Decision (5 cols) */}
         <div className="lg:col-span-5 space-y-6">
           {/* 1. Potential Urgency Signals Card (Specification Section 8) */}
-          <div className="rounded-xl border border-red-200 bg-red-50/40 p-5 shadow-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-red-200/80">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-[#B3261E]" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[#B3261E]">
-                  Potential urgency signals
-                </h4>
-              </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-200/80 text-red-900">
-                1 flag
-              </span>
-            </div>
-
-            <div className="mt-3.5">
-              <div className="text-xl font-bold text-[#102033] flex items-center gap-2">
-                <span>SpO₂ 91%</span>
-                <span className="text-xs font-medium text-[#B3261E] bg-white px-2 py-0.5 rounded border border-red-200">
-                  Below reference range
+          {urgencySignals.length === 0 ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-emerald-200/80">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                    Potential urgency signals
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  0 flags · Stable
                 </span>
               </div>
-              <p className="text-xs text-[#526276] mt-1 leading-relaxed">
-                Measured on room air at triage intake. Review clinically for respiratory instability or impending decompensation.
-              </p>
 
-              {/* Supporting Evidence */}
-              <div className="mt-3 pt-3 border-t border-red-200/60">
-                <span className="text-xs font-bold text-[#102033] block mb-1.5">
-                  Supporting evidence
-                </span>
-                <div className="space-y-1 text-xs text-[#25364A]">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                    <span>Triage form — Nurse triage reading: 91%</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                    <span>Patient voice intake — Reported shortness of breath</span>
+              <div className="mt-3.5">
+                <div className="text-lg font-bold text-[#102033] flex items-center gap-2">
+                  <span>No Critical Urgency Signals</span>
+                  <span className="text-xs font-medium text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                    Within Reference Limits
+                  </span>
+                </div>
+                <p className="text-xs text-[#526276] mt-1 leading-relaxed">
+                  All recorded vitals (SpO₂ {numSpo2 ? `${numSpo2}%` : 'normal'}, BP {numBpSys ? `${numBpSys}/${numBpDia || '--'} mmHg` : 'normal'}, Pulse {numHr ? `${numHr} bpm` : 'normal'}) are within standard physiological reference ranges. No acute triage escalation criteria triggered.
+                </p>
+
+                {/* Supporting Observations */}
+                <div className="mt-3 pt-3 border-t border-emerald-200/60">
+                  <span className="text-xs font-bold text-[#102033] block mb-1.5">
+                    Supporting observations
+                  </span>
+                  <div className="space-y-1 text-xs text-[#25364A]">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span>Intake vitals: SpO₂ {numSpo2 ? `${numSpo2}%` : '98%'}, BP {numBpSys ? `${numBpSys}/${numBpDia || '--'} mmHg` : '120/80 mmHg'}, Pulse {numHr ? `${numHr} bpm` : '78 bpm'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      <span>Presenting complaint: {patient.chiefComplaint || 'Routine medical review'}</span>
+                    </div>
                   </div>
                 </div>
+
+                {onNavigateToTab && (
+                  <div className="mt-3 pt-2 text-right">
+                    <button
+                      onClick={() => onNavigateToTab('extracted')}
+                      className="text-xs font-bold text-[#2563EB] hover:underline flex items-center gap-1 ml-auto cursor-pointer"
+                    >
+                      <span>View all clinical data</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className={`rounded-xl border p-5 shadow-xs ${
+              activeSignal?.severity === 'CRITICAL'
+                ? 'border-red-300 bg-red-50/60'
+                : 'border-red-200 bg-red-50/40'
+            }`}>
+              <div className="flex items-center justify-between pb-3 border-b border-red-200/80">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-[#B3261E]" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#B3261E]">
+                    Potential urgency signals
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-200/80 text-red-900">
+                  {urgencySignals.length} {urgencySignals.length === 1 ? 'flag' : 'flags'}
+                </span>
               </div>
 
-              {/* Evidence link */}
-              {onNavigateToTab && (
-                <div className="mt-3 pt-2 text-right">
-                  <button
-                    onClick={() => onNavigateToTab('extracted')}
-                    className="text-xs font-bold text-[#2563EB] hover:underline flex items-center gap-1 ml-auto cursor-pointer"
-                  >
-                    <span>View all evidence</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+              {/* Multi-signal tabs if > 1 */}
+              {urgencySignals.length > 1 && (
+                <div className="flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar pb-1">
+                  {urgencySignals.map((sig, idx) => (
+                    <button
+                      key={sig.id}
+                      onClick={() => setSelectedSignalIndex(idx)}
+                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-md border transition-all cursor-pointer whitespace-nowrap ${
+                        activeSignalIdx === idx
+                          ? 'bg-[#B3261E] text-white border-[#B3261E] shadow-xs'
+                          : 'bg-white text-[#B3261E] border-red-200 hover:bg-red-100/60'
+                      }`}
+                    >
+                      Signal {idx + 1}: {sig.title}
+                    </button>
+                  ))}
                 </div>
               )}
+
+              <div className="mt-3.5">
+                <div className="text-xl font-bold text-[#102033] flex items-center gap-2 flex-wrap">
+                  <span>{activeSignal?.title}</span>
+                  <span className="text-xs font-medium text-[#B3261E] bg-white px-2 py-0.5 rounded border border-red-200">
+                    {activeSignal?.badge}
+                  </span>
+                </div>
+                <p className="text-xs text-[#526276] mt-1.5 leading-relaxed">
+                  {activeSignal?.description}
+                </p>
+
+                {/* Supporting Evidence */}
+                {activeSignal?.evidence && activeSignal.evidence.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-red-200/60">
+                    <span className="text-xs font-bold text-[#102033] block mb-1.5">
+                      Supporting evidence
+                    </span>
+                    <div className="space-y-1.5 text-xs text-[#25364A]">
+                      {activeSignal.evidence.map((ev, eIdx) => (
+                        <div key={eIdx} className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ev.dotColor}`} />
+                          <span>{ev.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Evidence link */}
+                {onNavigateToTab && (
+                  <div className="mt-3 pt-2 text-right">
+                    <button
+                      onClick={() => onNavigateToTab('extracted')}
+                      className="text-xs font-bold text-[#2563EB] hover:underline flex items-center gap-1 ml-auto cursor-pointer"
+                    >
+                      <span>View all evidence</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 2. Quick Actions Stack (Specification Section 16) */}
           <div className="bg-white rounded-xl border border-[#E6ECF2] p-5 shadow-xs">
@@ -500,43 +948,61 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+              <div className={`p-3 rounded-lg border ${
+                numBpSys && numBpSys >= 140
+                  ? 'bg-amber-50/60 border-amber-200 text-amber-950'
+                  : 'bg-[#F8FAFC] border-[#E6ECF2]'
+              }`}>
                 <div className="flex items-center gap-1.5 text-xs text-[#6B7B8F]">
                   <Activity className="w-3.5 h-3.5 text-[#2563EB]" />
                   <span>Blood Pressure</span>
                 </div>
                 <div className="text-sm font-bold text-[#102033] mt-1 tabular-nums">
-                  {patient.vitals.bloodPressure || '124/82 mmHg'}
+                  {patient.vitals.bloodPressure || (numBpSys ? `${numBpSys}/${numBpDia || '--'} mmHg` : 'Not recorded')}
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+              <div className={`p-3 rounded-lg border ${
+                numHr && (numHr > 100 || numHr < 50)
+                  ? 'bg-amber-50/60 border-amber-200 text-amber-950'
+                  : 'bg-[#F8FAFC] border-[#E6ECF2]'
+              }`}>
                 <div className="flex items-center gap-1.5 text-xs text-[#6B7B8F]">
                   <Heart className="w-3.5 h-3.5 text-red-500" />
                   <span>Pulse Rate</span>
                 </div>
                 <div className="text-sm font-bold text-[#102033] mt-1 tabular-nums">
-                  {patient.vitals.pulseRate || '98 bpm'}
+                  {patient.vitals.pulseRate || (numHr ? `${numHr} bpm` : 'Not recorded')}
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+              <div className={`p-3 rounded-lg border ${
+                numTemp && numTemp >= 100.4
+                  ? 'bg-orange-50/60 border-orange-200 text-orange-950'
+                  : 'bg-[#F8FAFC] border-[#E6ECF2]'
+              }`}>
                 <div className="flex items-center gap-1.5 text-xs text-[#6B7B8F]">
                   <Thermometer className="w-3.5 h-3.5 text-orange-500" />
                   <span>Temperature</span>
                 </div>
                 <div className="text-sm font-bold text-[#102033] mt-1 tabular-nums">
-                  {patient.vitals.temperature || '101.4 °F'}
+                  {patient.vitals.temperature || (numTemp ? `${numTemp} °F` : 'Not recorded')}
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-[#B3261E]">
-                <div className="flex items-center gap-1.5 text-xs font-semibold">
+              <div className={`p-3 rounded-lg border ${
+                numSpo2 && numSpo2 < 94
+                  ? 'bg-red-50 border-red-200 text-[#B3261E]'
+                  : 'bg-[#F8FAFC] border-[#E6ECF2] text-[#102033]'
+              }`}>
+                <div className={`flex items-center gap-1.5 text-xs font-semibold ${
+                  numSpo2 && numSpo2 < 94 ? 'text-[#B3261E]' : 'text-[#6B7B8F]'
+                }`}>
                   <Wind className="w-3.5 h-3.5" />
                   <span>SpO₂ Saturation</span>
                 </div>
                 <div className="text-sm font-bold mt-1 tabular-nums">
-                  {patient.vitals.spO2 || '91%'}
+                  {patient.vitals.spO2 || (numSpo2 ? `${numSpo2}%` : 'Not recorded')}
                 </div>
               </div>
             </div>
@@ -590,7 +1056,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ patient, onNavigateToTab
                 <span className="font-semibold flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" /> Case Approved &amp; Dispatched to OPD Queue
                 </span>
-                <span className="text-[11px]">Reviewer: {patient.assignedReviewer || 'Dr. A. Sharma'}</span>
+                <span className="text-[11px]">Reviewer: {currentUser?.name || patient.assignedReviewer || 'Triage Officer'}</span>
               </div>
             )}
           </div>

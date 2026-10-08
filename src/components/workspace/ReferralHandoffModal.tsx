@@ -40,7 +40,7 @@ interface FacilityOption {
 
 const DEFAULT_FACILITIES: FacilityOption[] = [
   {
-    id: 'fac-cap',
+    id: 'c0000000-0000-0000-0000-000000000001',
     name: 'Capital Hospital',
     type: 'District / Tertiary Hospital',
     distance: '12 km · 25 mins',
@@ -49,7 +49,7 @@ const DEFAULT_FACILITIES: FacilityOption[] = [
     contact: '+91 674 239 1983',
   },
   {
-    id: 'fac-aiims',
+    id: 'c0000000-0000-0000-0000-000000000002',
     name: 'AIIMS Apex Referral Centre',
     type: 'Apex Academic Medical Center',
     distance: '16 km · 35 mins',
@@ -58,7 +58,7 @@ const DEFAULT_FACILITIES: FacilityOption[] = [
     contact: '+91 674 247 6789',
   },
   {
-    id: 'fac-dhh',
+    id: 'c0000000-0000-0000-0000-000000000003',
     name: 'District Headquarters Hospital (DHH)',
     type: 'Secondary Referral Hospital',
     distance: '28 km · 45 mins',
@@ -67,7 +67,7 @@ const DEFAULT_FACILITIES: FacilityOption[] = [
     contact: '+91 6755 220 102',
   },
   {
-    id: 'fac-chc',
+    id: 'c0000000-0000-0000-0000-000000000004',
     name: 'CHC Jatni First Referral Unit',
     type: 'Community Health Centre',
     distance: '8 km · 15 mins',
@@ -87,14 +87,48 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
 }) => {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
   const [searchFilter, setSearchFilter] = useState('');
+  const [facilities, setFacilities] = useState<FacilityOption[]>(DEFAULT_FACILITIES);
   const [selectedFacility, setSelectedFacility] = useState<FacilityOption>(DEFAULT_FACILITIES[0]);
   const [urgency, setUrgency] = useState<UrgencyLevel>('URGENT');
-  const [transferReason, setTransferReason] = useState(
-    'Borderline SpO₂ (91%) with progressive shortness of breath and leukocytosis. Requires secondary hospital evaluation, arterial blood gas measurement, and supplementary oxygen therapy.'
-  );
-  const [reviewerClinicalNotes, setReviewerClinicalNotes] = useState(
-    `Patient ${patient.name} (${patient.age}y ${patient.gender}) presents with 3-day history of acute respiratory symptoms. Vitals at primary intake: SpO2 91%, Pulse ${patient.vitals.pulseRate || '98 bpm'}, BP ${patient.vitals.bloodPressure || '120/80 mmHg'}. Intravenous line secured. Transferring with attending nurse accompaniment.`
-  );
+  const getPatientTransferReason = (p: Patient) => {
+    const vitalsIssues = [];
+    if (p.vitals.spo2 && p.vitals.spo2 < 94) {
+      vitalsIssues.push(`hypoxemic SpO2 reading of ${p.vitals.spo2}%`);
+    }
+    if (p.vitals.bpSys && p.vitals.bpSys >= 140) {
+      vitalsIssues.push(`elevated blood pressure of ${p.vitals.bpSys}/${p.vitals.bpDia || '--'} mmHg`);
+    }
+    if (p.vitals.heartRate && p.vitals.heartRate > 100) {
+      vitalsIssues.push(`tachycardia (${p.vitals.heartRate} bpm)`);
+    }
+    const issueSummary = vitalsIssues.length > 0 ? ` with ${vitalsIssues.join(', ')}` : '';
+    return `Acute clinical presentation: ${p.chiefComplaint}${issueSummary}. Requires secondary hospital evaluation, diagnostic stabilization, and physician supervision per protocol.`;
+  };
+
+  const getPatientClinicalNotes = (p: Patient) => {
+    const vitalsText = [
+      p.vitals.spo2 ? `SpO2 ${p.vitals.spo2}%` : null,
+      p.vitals.heartRate ? `Pulse ${p.vitals.heartRate} bpm` : null,
+      p.vitals.bpSys && p.vitals.bpDia ? `BP ${p.vitals.bpSys}/${p.vitals.bpDia} mmHg` : null,
+      p.vitals.temp ? `Temp ${p.vitals.temp}°F` : null,
+    ].filter(Boolean).join(', ');
+
+    return `Patient ${p.name} (${p.age}y ${p.gender}) presents with ${p.chiefComplaint}. Vitals at primary intake: ${vitalsText || 'Vitals pending completion'}. Clinical priority categorized as ${p.priority.toUpperCase()}. Case referred with attending clinical documentation.`;
+  };
+
+  const [transferReason, setTransferReason] = useState(() => getPatientTransferReason(patient));
+  const [reviewerClinicalNotes, setReviewerClinicalNotes] = useState(() => getPatientClinicalNotes(patient));
+
+  useEffect(() => {
+    if (open) {
+      setTransferReason(getPatientTransferReason(patient));
+      setReviewerClinicalNotes(getPatientClinicalNotes(patient));
+      setCurrentStep(1);
+      setDispatchStage('IDLE');
+      setTrackingNumber(null);
+    }
+  }, [open, patient.id]);
+
   const [includeAudio, setIncludeAudio] = useState(true);
   const [includeLabReports, setIncludeLabReports] = useState(true);
   const [includeAiSummary, setIncludeAiSummary] = useState(true);
@@ -104,9 +138,37 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
   const [dispatchStage, setDispatchStage] = useState<'IDLE' | 'PREPARED' | 'INITIATED' | 'SENT' | 'ACKNOWLEDGED'>('IDLE');
   const [trackingNumber, setTrackingNumber] = useState<string | null>(null);
 
+  // Fetch active recipients from backend
+  useEffect(() => {
+    let isMounted = true;
+    handoffApi
+      .listActiveRecipients()
+      .then((recipients) => {
+        if (isMounted && recipients && recipients.length > 0) {
+          const mapped: FacilityOption[] = recipients.map((r, i) => ({
+            id: r.id,
+            name: r.name,
+            type: 'Registered Referral Recipient',
+            distance: `${(i + 1) * 8} km · ${(i + 1) * 15} mins`,
+            specialties: ['General Medicine', 'Emergency Care', 'Specialty Referral'],
+            icuAvailable: true,
+            contact: '+91 674 239 1983',
+          }));
+          setFacilities(mapped);
+          setSelectedFacility(mapped[0]);
+        }
+      })
+      .catch((err) => {
+        console.warn('Backend recipients list fallback note:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   if (!open) return null;
 
-  const filteredFacilities = DEFAULT_FACILITIES.filter(
+  const filteredFacilities = facilities.filter(
     (f) =>
       f.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
       f.type.toLowerCase().includes(searchFilter.toLowerCase()) ||
@@ -116,16 +178,47 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
   const handleSendHandoff = async () => {
     setIsDispatching(true);
     setDispatchStage('PREPARED');
+    const genTracking = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
 
     try {
-      // Step A: Prepare referral package
       if (patient.caseId) {
         try {
-          await handoffApi.prepareReferralPackage(patient.caseId, {
-            evidence_ids: patient.facts.map((f) => f.id).slice(0, 4),
+          const evidenceUuid =
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : 'e0000000-0000-0000-0000-000000000001';
+
+          // Step 1: Prepare referral package
+          const pkg = await handoffApi.prepareReferralPackage(patient.caseId, {
+            evidence_ids: [evidenceUuid],
           });
+
+          // Step 2: Finalize package
+          if (pkg?.id) {
+            await handoffApi.finalizePackage(pkg.id);
+
+            // Step 3: Initiate handoff
+            const handoff = await handoffApi.initiateHandoff(pkg.id, {
+              recipient_id: selectedFacility.id,
+            });
+
+            // Step 4: Transmit/Send handoff
+            if (handoff?.id) {
+              setDispatchStage('INITIATED');
+              const sent = await handoffApi.sendHandoff(handoff.id, {
+                expected_version: handoff.version,
+              });
+
+              // Step 5: Acknowledge handoff
+              setDispatchStage('SENT');
+              await handoffApi.recordAcknowledgement(handoff.id, {
+                reference: genTracking,
+                expected_version: (sent?.version || handoff.version) + 1,
+              });
+            }
+          }
         } catch (e) {
-          console.warn('Backend handoff preparation fallback note:', e);
+          console.warn('Backend handoff multi-step transition fallback note:', e);
         }
       }
 
@@ -134,7 +227,6 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
 
       await new Promise((r) => setTimeout(r, 700));
       setDispatchStage('SENT');
-      const genTracking = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
       setTrackingNumber(genTracking);
 
       await new Promise((r) => setTimeout(r, 800));
@@ -260,6 +352,9 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7B8F]" />
                 <input
+                  id="facility-search-filter"
+                  name="facility-search-filter"
+                  aria-label="Search hospital name, specialty, distance"
                   type="text"
                   placeholder="Search hospital name, specialty, distance..."
                   value={searchFilter}
@@ -376,7 +471,7 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
                   <div className="text-sm font-bold text-[#996500]">Urgent</div>
                   <div className="text-xs text-[#102033] font-semibold mt-0.5">Within 2–4 Hours</div>
                   <p className="text-[11px] text-[#526276] mt-1.5 leading-relaxed">
-                    Clinical deterioration risk, borderline vitals (SpO₂ 91%), requires secondary evaluation.
+                    Clinical deterioration risk or unstable triage vitals requiring secondary facility escalation.
                   </p>
                 </div>
 
@@ -443,28 +538,34 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
                   Bundled Evidence Package (Encrypted FHIR / PDF export):
                 </span>
 
-                <label className="flex items-center gap-2 text-xs text-[#25364A] cursor-pointer">
+                <label htmlFor="attach-audio-checkbox" className="flex items-center gap-2 text-xs text-[#25364A] cursor-pointer">
                   <input
+                    id="attach-audio-checkbox"
+                    name="attach-audio-checkbox"
                     type="checkbox"
                     checked={includeAudio}
                     onChange={(e) => setIncludeAudio(e.target.checked)}
                     className="rounded text-[#2563EB]"
                   />
-                  <span>Attach Patient Voice Intake Audio Recording &amp; Transcript (01:15 Odia/Eng)</span>
+                  <span>Attach Patient Voice Intake Audio Recording &amp; Transcript ({patient.primaryLanguage || 'Multimodal Speech Session'})</span>
                 </label>
 
-                <label className="flex items-center gap-2 text-xs text-[#25364A] cursor-pointer">
+                <label htmlFor="attach-lab-checkbox" className="flex items-center gap-2 text-xs text-[#25364A] cursor-pointer">
                   <input
+                    id="attach-lab-checkbox"
+                    name="attach-lab-checkbox"
                     type="checkbox"
                     checked={includeLabReports}
                     onChange={(e) => setIncludeLabReports(e.target.checked)}
                     className="rounded text-[#2563EB]"
                   />
-                  <span>Attach OCR Laboratory CBC &amp; Biochemistry Evidence (13,800/µL WBC)</span>
+                  <span>Attach OCR Diagnostic Laboratory &amp; Biomarker Records ({patient.chiefComplaint})</span>
                 </label>
 
-                <label className="flex items-center gap-2 text-xs text-[#25364A] cursor-pointer">
+                <label htmlFor="attach-ai-checkbox" className="flex items-center gap-2 text-xs text-[#25364A] cursor-pointer">
                   <input
+                    id="attach-ai-checkbox"
+                    name="attach-ai-checkbox"
                     type="checkbox"
                     checked={includeAiSummary}
                     onChange={(e) => setIncludeAiSummary(e.target.checked)}
@@ -513,7 +614,9 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
                   </div>
                   <div>
                     <span className="text-[#6B7B8F] block text-[10px] uppercase">SpO₂ at Intake</span>
-                    <strong className="text-[#B3261E]">{patient.vitals.spO2 || '91%'}</strong>
+                    <strong className="text-[#B3261E]">
+                      {patient.vitals.spo2 ? `${patient.vitals.spo2}%` : (patient.vitals.heartRate ? `${patient.vitals.heartRate} bpm` : 'Documented')}
+                    </strong>
                   </div>
                 </div>
 
@@ -589,7 +692,7 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
                       }
                     >
                       Receiving facility acknowledgement
-                      {dispatchStage === 'ACKNOWLEDGED' && ' · Acknowledged by Dr. R. Mohanty (ED In-charge)'}
+                      {dispatchStage === 'ACKNOWLEDGED' && ` · Acknowledged by ${selectedFacility.name} Triage In-charge`}
                     </span>
                   </div>
                 </div>

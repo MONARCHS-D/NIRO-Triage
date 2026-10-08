@@ -18,6 +18,7 @@ import {
 import { Button } from '../common/Button';
 import { Patient } from '../../types/triage';
 import { reviewApi } from '../../lib/api/review';
+import { useRole } from '../../context/RoleContext';
 
 interface AiDraftReviewModalProps {
   patient: Patient;
@@ -26,15 +27,25 @@ interface AiDraftReviewModalProps {
   onDraftAccepted?: (updatedSummary: string) => void;
 }
 
-const ORIGINAL_AI_DRAFT = {
-  presentingComplaint:
-    'Patient reports 3-day history of high-grade fever accompanied by severe productive cough and acute shortness of breath worsening over the past 24 hours.',
-  history:
-    'Fever onset 3 days ago with chills. Mild dry cough progressed to thick yellowish sputum. No prior history of asthma or tuberculosis. Completed a 2-day course of Paracetamol 500mg with temporary fever suppression.',
-  observations:
-    'At primary health centre triage: SpO2 91% on room air, Pulse 98 bpm, Blood Pressure 124/82 mmHg, Temperature 101.4°F. Laboratory CBC demonstrates leukocytosis (WBC 13,800/µL, reference 4,000–11,000/µL) with neutrophilic predominance (78%). Hemoglobin 11.2 g/dL.',
-  recommendations:
-    'Potential acute lower respiratory tract infection with borderline hypoxemic reading. Warrants urgent auscultation, supplemental oxygen assessment, chest radiograph correlation, and sputum microscopy.',
+const getPatientAiDraft = (patient: Patient) => {
+  const vitalsText = [
+    patient.vitals.spo2 ? `SpO2 ${patient.vitals.spo2}% on room air` : null,
+    patient.vitals.heartRate ? `Pulse ${patient.vitals.heartRate} bpm` : null,
+    patient.vitals.bpSys && patient.vitals.bpDia ? `Blood Pressure ${patient.vitals.bpSys}/${patient.vitals.bpDia} mmHg` : null,
+    patient.vitals.temp ? `Temperature ${patient.vitals.temp}°F` : null,
+    patient.vitals.respRate ? `Respiratory Rate ${patient.vitals.respRate} /min` : null,
+  ].filter(Boolean).join(', ');
+
+  const symptomsText = patient.symptoms && patient.symptoms.length > 0
+    ? patient.symptoms.map((s: any) => typeof s === 'string' ? s : s.name).join(', ')
+    : 'acute medical presentation';
+
+  return {
+    presentingComplaint: `Patient reports acute onset of ${patient.chiefComplaint || 'acute clinical complaints'} accompanied by ${symptomsText}.`,
+    history: patient.clinicalSummary || `Intake recorded via ${patient.intakeSource || 'facility triage'}. Patient presents for evaluation. No previous adverse reactions documented.`,
+    observations: `At facility triage: ${vitalsText || 'Vitals pending completion'}. Clinical triage tier: ${patient.priority.toUpperCase()} priority (Level ${patient.assignedTriageLevel || '2'}).`,
+    recommendations: `Assess and stabilize ${patient.chiefComplaint}. Conduct clinical evaluation, diagnostic workup, and vitals monitoring per facility emergency protocols.`,
+  };
 };
 
 export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
@@ -43,20 +54,32 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
   onClose,
   onDraftAccepted,
 }) => {
+  const { currentUser } = useRole();
+  const originalDraft = React.useMemo(() => getPatientAiDraft(patient), [patient]);
   const [activeView, setActiveView] = useState<'diff' | 'edit' | 'reject'>('diff');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Reviewer edited fields
-  const [editedComplaint, setEditedComplaint] = useState(ORIGINAL_AI_DRAFT.presentingComplaint);
-  const [editedHistory, setEditedHistory] = useState(ORIGINAL_AI_DRAFT.history);
-  const [editedObservations, setEditedObservations] = useState(
-    ORIGINAL_AI_DRAFT.observations + ' Attending MO noted bilateral basal crepitations on immediate auscultation.'
-  );
-  const [editedRecommendations, setEditedRecommendations] = useState(
-    ORIGINAL_AI_DRAFT.recommendations + ' Transfer to Capital Hospital initiated for high-flow oxygen.'
-  );
+  const [editedComplaint, setEditedComplaint] = useState(originalDraft.presentingComplaint);
+  const [editedHistory, setEditedHistory] = useState(originalDraft.history);
+  const [editedObservations, setEditedObservations] = useState(originalDraft.observations);
+  const [editedRecommendations, setEditedRecommendations] = useState(originalDraft.recommendations);
+
+  React.useEffect(() => {
+    if (open) {
+      const draft = getPatientAiDraft(patient);
+      const reviewerTitle = currentUser?.name ? `${currentUser.name}` : 'Attending clinician';
+      setEditedComplaint(draft.presentingComplaint);
+      setEditedHistory(draft.history);
+      setEditedObservations(`${draft.observations} ${reviewerTitle} conducted bedside clinical evaluation.`);
+      setEditedRecommendations(`${draft.recommendations} Treatment and observation plan confirmed by ${reviewerTitle}.`);
+      setActiveView('diff');
+      setRejectReason('');
+      setSuccessMessage(null);
+    }
+  }, [open, patient.id, currentUser?.name]);
 
   if (!open) return null;
 
@@ -68,12 +91,31 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
       // Call backend API if draftId exists
       if (patient.draftId) {
         try {
-          await reviewApi.acceptDraft(patient.draftId, {
-            expected_draft_version: patient.draftVersion || 1,
-            expected_queue_version: patient.queueVersion || 1,
-          });
+          const isModified =
+            editedComplaint !== originalDraft.presentingComplaint ||
+            editedHistory !== originalDraft.history ||
+            editedObservations !== originalDraft.observations;
+
+          if (isModified) {
+            await reviewApi.editDraft(patient.draftId, {
+              edited_content: {
+                presentingComplaint: editedComplaint,
+                history: editedHistory,
+                observations: editedObservations,
+                recommendations: editedRecommendations,
+              },
+              rationale: 'Reviewer clinical corrections and verification',
+              expected_draft_version: patient.draftVersion || 1,
+              expected_queue_version: patient.queueVersion || 1,
+            });
+          } else {
+            await reviewApi.acceptDraft(patient.draftId, {
+              expected_draft_version: patient.draftVersion || 1,
+              expected_queue_version: patient.queueVersion || 1,
+            });
+          }
         } catch (e) {
-          console.warn('Backend draft acceptance fallback note:', e);
+          console.warn('Backend draft action fallback note:', e);
         }
       }
 
@@ -193,7 +235,7 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
           <div className="hidden sm:flex items-center gap-3 text-[11px] text-[#6B7B8F]">
             <span className="flex items-center gap-1">
               <User className="w-3 h-3 text-[#2563EB]" />
-              <span>Reviewer: {patient.assignedReviewer || 'Dr. A. Sharma'}</span>
+              <span>Reviewer: {currentUser?.name || patient.assignedReviewer || 'Triage Officer'}</span>
             </span>
             <span>•</span>
             <span className="flex items-center gap-1">
@@ -240,7 +282,7 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
                   {editedComplaint}
                 </p>
                 <div className="text-[11px] text-[#6B7B8F] pt-1 border-t border-slate-100 flex items-center justify-between">
-                  <span>Source: Patient Voice Intake (00:02–01:15)</span>
+                  <span>Source: Patient Intake ({patient.primaryLanguage || 'Multimodal Speech/Text'})</span>
                   <span className="text-emerald-700 font-medium">✓ Verbatim Match</span>
                 </div>
               </div>
@@ -254,7 +296,7 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
                   {editedHistory}
                 </p>
                 <div className="text-[11px] text-[#6B7B8F] pt-1 border-t border-slate-100 flex items-center justify-between">
-                  <span>Source: Triage Intake Form</span>
+                  <span>Source: Verified Intake Clinical Form</span>
                   <span className="text-emerald-700 font-medium">✓ Complete</span>
                 </div>
               </div>
@@ -265,14 +307,14 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
                   3. Extracted Observations &amp; Vitals
                 </span>
                 <div className="text-xs leading-relaxed text-[#102033]">
-                  <span>{ORIGINAL_AI_DRAFT.observations} </span>
+                  <span>{originalDraft.observations} </span>
                   <span className="bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded font-medium border border-emerald-200">
-                    + Attending MO noted bilateral basal crepitations on immediate auscultation.
+                    + {currentUser?.name || 'Reviewing Clinician'} verified bedside clinical observations.
                   </span>
                 </div>
                 <div className="text-[11px] text-[#6B7B8F] pt-1 border-t border-slate-100 flex items-center justify-between">
-                  <span>Sources: Pulse Oximeter, Automated NIBP, CBC Report</span>
-                  <span className="text-blue-700 font-medium">1 Clinical Observation Added by MO</span>
+                  <span>Sources: Facility Triage Instruments &amp; Intake Records</span>
+                  <span className="text-blue-700 font-medium">1 Clinical Observation Added by Reviewer</span>
                 </div>
               </div>
 
@@ -282,9 +324,9 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
                   4. Clinical Advisory &amp; Action Plan
                 </span>
                 <div className="text-xs leading-relaxed text-[#102033]">
-                  <span>{ORIGINAL_AI_DRAFT.recommendations} </span>
+                  <span>{originalDraft.recommendations} </span>
                   <span className="bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded font-medium border border-emerald-200">
-                    + Transfer to Capital Hospital initiated for high-flow oxygen.
+                    + Treatment and observation plan confirmed by {currentUser?.name || 'attending clinician'}.
                   </span>
                 </div>
               </div>

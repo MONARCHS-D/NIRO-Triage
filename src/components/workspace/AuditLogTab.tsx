@@ -2,16 +2,39 @@
 
 import React from 'react';
 import { Patient } from '../../types/triage';
-import { Shield, Clock, FileBadge, Lock, CheckCircle2 } from 'lucide-react';
+import { caseApi } from '../../lib/api/cases';
+import { Shield, Clock, FileBadge, Lock, CheckCircle2, Server } from 'lucide-react';
 
 interface AuditLogTabProps {
   patient: Patient;
+  workspaceData?: Record<string, any> | null;
 }
 
-export const AuditLogTab: React.FC<AuditLogTabProps> = ({ patient }) => {
+export const AuditLogTab: React.FC<AuditLogTabProps> = ({ patient, workspaceData }) => {
+  const [backendHistory, setBackendHistory] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    if (patient.caseId) {
+      caseApi
+        .getCaseHistory(patient.caseId)
+        .then((res) => {
+          if (isMounted && res?.history) {
+            setBackendHistory(res.history);
+          }
+        })
+        .catch((err) => {
+          console.warn('Backend case history fetch note:', err);
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [patient.caseId]);
+
   return (
-    <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs max-w-4xl">
-      <div className="flex flex-wrap items-center justify-between pb-4 mb-6 border-b border-[#E6ECF2] gap-3">
+    <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs max-w-4xl space-y-6">
+      <div className="flex flex-wrap items-center justify-between pb-4 border-b border-[#E6ECF2] gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-emerald-600" />
@@ -22,11 +45,52 @@ export const AuditLogTab: React.FC<AuditLogTabProps> = ({ patient }) => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {backendHistory.length > 0 && (
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-[#164FD6] border border-blue-200 flex items-center gap-1">
+              <Server className="w-3 h-3" /> {backendHistory.length} Backend Audit Events
+            </span>
+          )}
           <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-[#087443] border border-emerald-200 flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3" /> AB-DM Ready Audit Schema
           </span>
         </div>
       </div>
+
+      {backendHistory.length > 0 && (
+        <div className="p-4 rounded-xl bg-blue-50/30 border border-blue-200">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-[#164FD6] mb-3 flex items-center gap-1.5">
+            <Server className="w-3.5 h-3.5" /> CareIntel Database State Machine Transitions
+          </h4>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-blue-200 text-[#6B7B8F] uppercase tracking-wider font-semibold text-[10px]">
+                  <th className="py-2 px-2.5">Time (UTC)</th>
+                  <th className="py-2 px-2.5">State Transition</th>
+                  <th className="py-2 px-2.5">Version</th>
+                  <th className="py-2 px-2.5">Command</th>
+                  <th className="py-2 px-2.5">Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-blue-100 font-mono text-[11px]">
+                {backendHistory.map((item) => (
+                  <tr key={item.id}>
+                    <td className="py-2 px-2.5 text-[#526276] whitespace-nowrap">
+                      {new Date(item.transitioned_at).toLocaleTimeString()}
+                    </td>
+                    <td className="py-2 px-2.5 font-bold text-[#102033]">
+                      {item.from_state} &rarr; <span className="text-[#164FD6]">{item.to_state}</span>
+                    </td>
+                    <td className="py-2 px-2.5 text-[#526276]">v{item.aggregate_version}</td>
+                    <td className="py-2 px-2.5 text-[#25364A]">{item.command_type}</td>
+                    <td className="py-2 px-2.5 font-sans text-xs text-[#526276]">{item.reason || 'State transition'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">

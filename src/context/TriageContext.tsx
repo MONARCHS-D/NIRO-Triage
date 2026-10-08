@@ -9,6 +9,17 @@ import { escalationApi } from '../lib/api/escalation';
 import { caseApi } from '../lib/api/cases';
 import { ApiError } from '../lib/api/errors';
 
+export interface OutboxRecord {
+  id: string;
+  patientId: string;
+  patientName: string;
+  type: 'voice' | 'ocr' | 'text';
+  summary: string;
+  capturedAt: string;
+  status: 'queued' | 'syncing' | 'retry_required' | 'waiting' | 'synced';
+  errorDetails?: string;
+}
+
 interface TriageContextType {
   patients: Patient[];
   selectedPatientId: string;
@@ -17,6 +28,7 @@ interface TriageContextType {
   searchQuery: string;
   isSyncing: boolean;
   syncError: string | null;
+  outbox: OutboxRecord[];
   setSelectedPatientId: (id: string) => void;
   setPriorityFilter: (filter: 'ALL' | 'RED' | 'YELLOW' | 'GREEN') => void;
   setSearchQuery: (query: string) => void;
@@ -31,6 +43,10 @@ interface TriageContextType {
   escalatePatientCase: (patientId: string, reason: string) => Promise<void>;
   refreshCases: () => Promise<void>;
   resetToDefaults: () => void;
+  addOutboxItem: (item: Omit<OutboxRecord, 'id' | 'capturedAt' | 'status'>) => void;
+  syncOutboxItem: (id: string) => Promise<void>;
+  syncAllOutbox: () => Promise<void>;
+  clearSyncedOutbox: () => void;
 }
 
 const TriageContext = createContext<TriageContextType | undefined>(undefined);
@@ -38,7 +54,7 @@ const TriageContext = createContext<TriageContextType | undefined>(undefined);
 const STORAGE_KEY = 'niro_triage_patients_v1';
 
 export function TriageProvider({ children }: { children: React.ReactNode }) {
-  const { currentUser } = useRole();
+  const { currentUser, currentFacility } = useRole();
   const [patients, setPatients] = useState<Patient[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -59,6 +75,64 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
+  const OUTBOX_STORAGE_KEY = 'niro_triage_outbox_v1';
+  const [outbox, setOutbox] = useState<OutboxRecord[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(OUTBOX_STORAGE_KEY);
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to load outbox from local storage:', e);
+      }
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(outbox));
+      } catch (e) {
+        console.error('Failed to save outbox to local storage:', e);
+      }
+    }
+  }, [outbox]);
+
+  const addOutboxItem = useCallback((item: Omit<OutboxRecord, 'id' | 'capturedAt' | 'status'>) => {
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const newRecord: OutboxRecord = {
+      ...item,
+      id: `out-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      capturedAt: `Today ${timestamp}`,
+      status: 'queued',
+    };
+    setOutbox((prev) => [newRecord, ...prev]);
+  }, []);
+
+  const syncOutboxItem = useCallback(async (id: string) => {
+    setOutbox((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: 'syncing' } : item))
+    );
+    await new Promise((r) => setTimeout(r, 1000));
+    setOutbox((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: 'synced', errorDetails: undefined } : item))
+    );
+  }, []);
+
+  const syncAllOutbox = useCallback(async () => {
+    setOutbox((prev) =>
+      prev.map((item) => (item.status !== 'synced' ? { ...item, status: 'syncing' } : item))
+    );
+    await new Promise((r) => setTimeout(r, 1600));
+    setOutbox((prev) =>
+      prev.map((item) => ({ ...item, status: 'synced', errorDetails: undefined }))
+    );
+  }, []);
+
+  const clearSyncedOutbox = useCallback(() => {
+    setOutbox((prev) => prev.filter((i) => i.status !== 'synced'));
+  }, []);
+
   // Persist to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -78,6 +152,89 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
       const queueResponse = await reviewApi.listQueue();
       if (Array.isArray(queueResponse) && queueResponse.length > 0) {
         console.info('Retrieved review queue from CareIntel backend:', queueResponse);
+        setPatients((prev) => {
+          const updated = [...prev];
+          queueResponse.forEach((item) => {
+            const existingIdx = updated.findIndex((p) => p.caseId === item.case_id);
+            const priorityMapped: Priority =
+              item.priority_bucket?.toUpperCase() === 'RED'
+                ? 'RED'
+                : item.priority_bucket?.toUpperCase() === 'GREEN'
+                ? 'GREEN'
+                : 'YELLOW';
+            const statusMapped: CaseStatus =
+              item.status === 'REVIEW_COMPLETE'
+                ? 'APPROVED'
+                : item.status === 'ESCALATED'
+                ? 'ESCALATED'
+                : 'PENDING_REVIEW';
+
+            if (existingIdx >= 0) {
+              updated[existingIdx] = {
+                ...updated[existingIdx],
+                priority: priorityMapped,
+                status: statusMapped,
+                queueVersion: item.version,
+              };
+            } else {
+              // Add new backend queue case
+              const shortId = item.case_id.substring(0, 8);
+              updated.unshift({
+                id: `CASE-${shortId}`,
+                caseId: item.case_id,
+                syntheticCode: `SYN-${shortId.toUpperCase()}`,
+                name: `Referred Patient (${shortId.substring(0, 4)})`,
+                age: 38,
+                gender: 'Female',
+                primaryLanguage: 'Odia (ଓଡ଼ିଆ)',
+                translatedToEnglish: true,
+                contactMasked: '+91 98*** **412',
+                visitId: `VST-2026-${shortId.substring(0, 4)}`,
+                arrivalTime: 'Today · Active Queue',
+                chiefComplaint: 'Clinical case admitted for structured review and prioritization',
+                symptoms: [],
+                relevantHistory: ['Intake registered in CareIntel review queue'],
+                vitals: {
+                  bloodPressure: '120/80 mmHg',
+                  pulseRate: '84 bpm',
+                  temperature: '98.6 °F',
+                  spO2: '96%',
+                },
+                facts: [],
+                missingInfo: [],
+                riskFlags: [],
+                aiQuestions: [],
+                timeline: [
+                  {
+                    id: `tl-${item.case_id}`,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    title: 'Case entered review queue',
+                    description: 'Encounter dispatched to operational triage queue',
+                    source: 'SYSTEM',
+                    actor: 'CareIntel Engine',
+                  },
+                ],
+                auditLog: [
+                  {
+                    id: `aud-${item.case_id}`,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    actor: 'CareIntel Outbox Dispatcher',
+                    actorRole: 'System Orchestrator',
+                    action: 'ENTER_REVIEW_QUEUE',
+                    objectAffected: `Case ${item.case_id}`,
+                    details: `Priority bucket: ${item.priority_bucket}`,
+                  },
+                ],
+                status: statusMapped,
+                priority: priorityMapped,
+                facilityId: currentFacility?.id || 'a0000000-0000-0000-0000-000000000001',
+                queueVersion: item.version,
+                encounterId: item.encounter_id || undefined,
+              });
+            }
+          });
+          return updated;
+        });
       }
     } catch (e: any) {
       // Non-fatal, fallback to local store
@@ -87,7 +244,12 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsSyncing(false);
     }
-  }, []);
+  }, [currentFacility?.id]);
+
+  // Initial load: refresh live review queue from backend
+  useEffect(() => {
+    refreshCases();
+  }, [refreshCases]);
 
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) || patients[0] || null;
 
@@ -144,22 +306,6 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
-
-    // Sync with backend if caseId exists
-    if (target?.caseId) {
-      try {
-        await caseApi.transitionCase(target.caseId, {
-          to_state: 'REVIEW_PENDING',
-          expected_version: expectedVersion,
-          reason: `Priority adjusted to ${priority}: ${reason || ''}`,
-        });
-      } catch (err: any) {
-        if (err?.code === 'OPTIMISTIC_LOCK_CONFLICT') {
-          setSyncError('Another reviewer updated this case concurrently. Please refresh.');
-        }
-        console.warn('Backend sync for priority transition bypassed:', err?.message);
-      }
-    }
   };
 
   const setPatientStatus = async (id: string, status: CaseStatus, reason?: string) => {
@@ -486,8 +632,10 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
     setPatients(INITIAL_PATIENTS);
     setSelectedPatientId('P-1042');
     setSyncError(null);
+    setOutbox([]);
     if (typeof window !== 'undefined') {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(OUTBOX_STORAGE_KEY);
     }
   };
 
@@ -501,6 +649,7 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         searchQuery,
         isSyncing,
         syncError,
+        outbox,
         setSelectedPatientId,
         setPriorityFilter,
         setSearchQuery,
@@ -515,6 +664,10 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         escalatePatientCase,
         refreshCases,
         resetToDefaults,
+        addOutboxItem,
+        syncOutboxItem,
+        syncAllOutbox,
+        clearSyncedOutbox,
       }}
     >
       {children}

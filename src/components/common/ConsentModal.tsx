@@ -67,8 +67,10 @@ export const ConsentModal: React.FC<ConsentModalProps> = ({ isOpen, onConsent, o
           </div>
         </div>
 
-        <label className="flex items-center gap-3 select-none cursor-pointer py-1 px-1">
+        <label htmlFor="consent-checkbox" className="flex items-center gap-3 select-none cursor-pointer py-1 px-1">
           <input
+            id="consent-checkbox"
+            name="consent-checkbox"
             type="checkbox"
             checked={understood}
             onChange={(e) => setUnderstood(e.target.checked)}

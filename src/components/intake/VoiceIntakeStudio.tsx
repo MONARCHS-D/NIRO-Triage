@@ -54,6 +54,8 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
   ]);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Timer loop when listening
   useEffect(() => {
@@ -70,6 +72,10 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream?.getTracks().forEach((t) => t.stop());
+      }
     };
   }, [voiceState]);
 
@@ -78,17 +84,52 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
     setDurationSeconds(0);
     setTranscriptText('');
     setTranslationText('');
+
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          try {
+            const recorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = recorder;
+            audioChunksRef.current = [];
+            recorder.ondataavailable = (e) => {
+              if (e.data.size > 0) audioChunksRef.current.push(e.data);
+            };
+            recorder.start(250);
+          } catch (recErr) {
+            console.warn('MediaRecorder init fallback note:', recErr);
+          }
+        })
+        .catch((err) => {
+          console.warn('Microphone permission bypassed with simulated audio:', err);
+        });
+    }
   };
 
   const pauseRecording = () => {
     setVoiceState('PAUSED');
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.pause();
+    }
   };
 
   const resumeRecording = () => {
     setVoiceState('LISTENING');
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+      mediaRecorderRef.current.resume();
+    }
   };
 
   const stopAndProcess = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream?.getTracks().forEach((t) => t.stop());
+      } catch (stopErr) {
+        console.warn('MediaRecorder stop note:', stopErr);
+      }
+    }
     setVoiceState('PROCESSING');
     setTimeout(() => {
       setVoiceState('TRANSCRIBING');
@@ -112,6 +153,15 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
   };
 
   const resetRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream?.getTracks().forEach((t) => t.stop());
+      } catch (err) {
+        // no-op
+      }
+    }
+    audioChunksRef.current = [];
     setVoiceState('IDLE');
     setDurationSeconds(0);
     setTranscriptText('');
