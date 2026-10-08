@@ -8,6 +8,7 @@ import { ReportExtractStudio } from '../intake/ReportExtractStudio';
 import { ConsentModal } from '../common/ConsentModal';
 import { useTriage } from '../../context/TriageContext';
 import { useRole } from '../../context/RoleContext';
+import { useNotifications } from '../../context/NotificationContext';
 import { Patient, Symptom, ExtractedFact } from '../../types/triage';
 import {
   Mic,
@@ -40,6 +41,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
 }) => {
   const { addPatient, addOutboxItem } = useTriage();
   const { currentFacility, isOffline } = useRole();
+  const { notifyArrival } = useNotifications();
 
   // Stepper: 1 Patient Info -> 2 Input Details -> 3 Review
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
@@ -228,6 +230,18 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         summary: typedComplaint || capturedVoiceData?.translation || 'New clinical intake registered',
       });
     }
+
+    notifyArrival({
+      patientId: newId,
+      patientName: name,
+      patientAge: parseInt(age) || 35,
+      patientGender: gender,
+      department: 'CHC Outpatient Desk',
+      priority: newPatient.priority,
+      chiefComplaint: typedComplaint || capturedVoiceData?.translation || 'New patient intake registered',
+      vitalsSnippet: `BP: ${newPatient.vitals.bloodPressure} · SpO2: ${newPatient.vitals.spO2} · Temp: ${newPatient.vitals.temperature}`,
+      facilityName: currentFacility?.name || 'Nuapada District Hospital',
+    });
 
     onIntakeCompleted(newId);
   };

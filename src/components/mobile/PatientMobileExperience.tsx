@@ -21,10 +21,12 @@ import { LanguageSelector } from '../common/LanguageSelector';
 import { SUPPORTED_LANGUAGES, LanguageOption } from '../../lib/audioSimulator';
 import { VoiceIntakeStudio } from '../intake/VoiceIntakeStudio';
 import { useTriage } from '../../context/TriageContext';
+import { useNotifications } from '../../context/NotificationContext';
 import { Patient } from '../../types/triage';
 
 export const PatientMobileExperience: React.FC = () => {
   const { addPatient } = useTriage();
+  const { notifyArrival } = useNotifications();
   const [activeTab, setActiveTab] = useState<'HOME' | 'VISITS' | 'MESSAGES' | 'PROFILE'>('HOME');
   const [activeFlow, setActiveFlow] = useState<'SELECTION' | 'VOICE' | 'TYPE' | 'SUCCESS'>('SELECTION');
   const [selectedLanguage, setSelectedLanguage] = useState<LanguageOption>(SUPPORTED_LANGUAGES[0]);
@@ -103,6 +105,18 @@ export const PatientMobileExperience: React.FC = () => {
     };
 
     addPatient(newPatient);
+
+    notifyArrival({
+      patientId: newId,
+      patientName,
+      patientAge: parseInt(patientAge) || 29,
+      patientGender: 'Female',
+      department: 'Citizen Self-Service / Mobile',
+      priority: 'YELLOW',
+      chiefComplaint: data.translation,
+      facilityName: 'Nuapada Mobile Health App',
+    });
+
     setActiveFlow('SUCCESS');
   };
 
@@ -164,6 +178,18 @@ export const PatientMobileExperience: React.FC = () => {
     };
 
     addPatient(newPatient);
+
+    notifyArrival({
+      patientId: newId,
+      patientName,
+      patientAge: parseInt(patientAge) || 30,
+      patientGender: 'Female',
+      department: 'Citizen Self-Service / Mobile',
+      priority: 'GREEN',
+      chiefComplaint: typedSymptom,
+      facilityName: 'Nuapada Mobile Health App',
+    });
+
     setActiveFlow('SUCCESS');
   };
 

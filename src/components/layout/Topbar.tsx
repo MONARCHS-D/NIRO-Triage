@@ -18,6 +18,8 @@ import { useTriage } from '../../context/TriageContext';
 import { UserRole } from '../../types/roles';
 import { BackendHealthBadge } from '../common/BackendHealthBadge';
 import { SyncOutboxDrawer } from '../common/SyncOutboxDrawer';
+import { NotificationBell } from './NotificationBell';
+import { useNotifications } from '../../context/NotificationContext';
 
 export const Topbar: React.FC = () => {
   const {
@@ -30,6 +32,7 @@ export const Topbar: React.FC = () => {
     setIsOffline,
   } = useRole();
   const { searchQuery, setSearchQuery, resetToDefaults, outbox } = useTriage();
+  const { simulateIncomingArrival } = useNotifications();
   const [showOutbox, setShowOutbox] = useState(false);
   const pendingSyncCount = outbox ? outbox.filter((i) => i.status !== 'synced').length : 0;
 
@@ -42,6 +45,15 @@ export const Topbar: React.FC = () => {
           <span>Educational prototype — triage-support only. Not a medical diagnosis or treatment system.</span>
         </div>
         <div className="flex items-center gap-3 text-slate-300">
+          <button
+            onClick={() => simulateIncomingArrival('RED')}
+            title="Trigger a real-time emergency arrival popup on the right side"
+            className="flex items-center gap-1 text-amber-300 hover:text-white transition-colors cursor-pointer text-[11px] font-semibold"
+          >
+            <Bell className="w-3 h-3 text-amber-400" />
+            <span>Simulate Arrival</span>
+          </button>
+          <span className="hidden md:inline text-slate-400">|</span>
           <span className="hidden sm:inline">Retention: session-scoped (Synthetic Data)</span>
           <button
             onClick={resetToDefaults}
@@ -112,6 +124,9 @@ export const Topbar: React.FC = () => {
             </select>
             <ChevronDown className="w-3.5 h-3.5 text-[#164FD6] absolute right-2 pointer-events-none" />
           </div>
+ 
+          {/* Triage Notifications & Emergency Arrival Bell */}
+          <NotificationBell />
 
           {/* Live Backend Health & Database Connectivity Badge */}
           <BackendHealthBadge />
