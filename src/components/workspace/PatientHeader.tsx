@@ -19,6 +19,7 @@ import {
 import { useTriage } from '../../context/TriageContext';
 import { useRole } from '../../context/RoleContext';
 import { ReferralHandoffModal } from './ReferralHandoffModal';
+import { RestrictedAction } from '../common/rbac/RestrictedAction';
 
 interface PatientHeaderProps {
   patient: Patient;
@@ -172,19 +173,23 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
           </div>
 
           {onOpenEditModal && (
-            <Button
-              variant="secondary"
-              size="md"
-              disabled={capabilities.isSuspended}
-              title={capabilities.isSuspended ? 'Account Suspended: Cannot edit patient record' : undefined}
-              onClick={capabilities.isSuspended ? undefined : onOpenEditModal}
-              icon={<Edit className="w-3.5 h-3.5" />}
-            >
-              Edit
-            </Button>
+            <RestrictedAction isRestricted={capabilities.isSuspended} reason="edit">
+              <Button
+                variant="secondary"
+                size="md"
+                disabled={capabilities.isSuspended}
+                onClick={capabilities.isSuspended ? undefined : onOpenEditModal}
+                icon={<Edit className="w-3.5 h-3.5" />}
+              >
+                Edit
+              </Button>
+            </RestrictedAction>
           )}
 
-          <div title={!capabilities.canReferHandoff ? 'Referral dispatch requires Doctor / Medical Officer authorization' : undefined}>
+          <RestrictedAction
+            isRestricted={!capabilities.canReferHandoff}
+            reason={capabilities.isSuspended ? 'handoff' : 'Referral dispatch requires Doctor / Medical Officer authorization'}
+          >
             <Button
               variant="secondary"
               size="md"
@@ -194,10 +199,13 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
             >
               Refer / Handoff
             </Button>
-          </div>
+          </RestrictedAction>
 
           {patient.status !== 'APPROVED' ? (
-            <div title={!capabilities.canApproveCase ? 'Official case review sign-off requires Medical Officer authorization' : undefined}>
+            <RestrictedAction
+              isRestricted={!capabilities.canApproveCase}
+              reason={capabilities.isSuspended ? 'approval' : 'Official case review sign-off requires Medical Officer authorization'}
+            >
               <Button
                 variant="primary"
                 size="md"
@@ -207,7 +215,7 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
               >
                 Mark as reviewed
               </Button>
-            </div>
+            </RestrictedAction>
           ) : (
             <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />

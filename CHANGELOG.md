@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Calm Clinical Access-Control & Shared Restriction System (`src/components/common/rbac/`)**:
+  - Replaced alarming red warning screens with a calm, professional clinical governance experience.
+  - **`SuspensionBanner`**: Compact muted rose status banner (`bg-rose-50 border-rose-200`) across all authenticated workstation pages with a static `Read-only` pill, clear restriction notice, and `"View access details →"` link.
+  - **`AccountStatusBadge`**: Static status badge (`variant="topbar" | "sidebar" | "credentials" | "inline"`) with lock and shield icons, completely eliminating pulsing animations.
+  - **`RestrictedAction`**: Reusable accessible wrapper providing informative tooltips (`Disabled · AI processing restricted`, `Disabled · Clinical authority suspended`, `Disabled · Handoff permission required`, `Disabled · Approval permission required`) and keyboard accessibility.
+  - **`AccessDeniedPanel`**: Structured state panel for prohibited destinations (`/intake`, `/intake/voice`) providing context on *"What you can do"*, data retention preservation, and a smooth *"Return to Dashboard"* path.
+  - **Patient Safety Preservation**: Guaranteed that safety-critical evidence (hypoxia SpO2 < 92%, acute distress flags) and historical triage cases remain fully visible for clinical auditing while write mutations are disabled.
+  - **Structured Login Blocking (`/auth/login`)**: Dedicated *"Account Access Restricted"* card with clear next steps (*"Contact Facility Administrator"*) and a clean *"Try another account"* reset action.
+  - **Mid-Session Capture Protection**: Added automatic halt for live audio recordings in `VoiceIntakeStudio` when practitioner suspension takes effect, avoiding silent data loss.
 - **Staff Directory & Access Management Console (`src/components/views/SettingsView.tsx`)**:
   - Centralized administrative console for Facility System Administrators (`ADMIN` role with `capabilities.canManageSettings` / `manage:users`).
   - Real-time practitioner directory displaying professional registrations, departments, role assignments, and active/suspended access statuses.

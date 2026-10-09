@@ -19,6 +19,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
+import { AccountStatusBadge } from '../common/rbac/AccountStatusBadge';
 
 export interface SidebarProps {
   currentTab?: string;
@@ -125,7 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 cursor-default ${
                 currentUser.status === 'SUSPENDED'
-                  ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                  ? 'bg-rose-50 text-rose-800 border border-rose-200'
                   : 'bg-blue-100 text-[#2563EB]'
               }`}
               title={`${currentUser.name} · ${currentUser.status === 'SUSPENDED' ? 'SUSPENDED' : currentUser.title} (${currentFacility.name})`}
@@ -147,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
                   currentUser.status === 'SUSPENDED'
-                    ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                    ? 'bg-rose-50 text-rose-800 border border-rose-200'
                     : 'bg-blue-100 text-[#2563EB]'
                 }`}
               >
@@ -156,15 +157,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-[#102033] truncate">{currentUser.name}</p>
                 <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  {currentUser.status === 'SUSPENDED' ? (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300 flex items-center gap-1 truncate">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
-                      Suspended · Access Revoked
-                    </span>
-                  ) : (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-[#164FD6] border border-blue-200 truncate">
-                      {currentUser.role === 'DOCTOR' ? 'Doctor · Full Signoff' : currentUser.role === 'NURSE' ? 'Nurse · Intake & Vitals' : currentUser.role === 'HEALTH_WORKER' ? 'CHO · Frontline' : currentUser.role === 'ADMIN' ? 'Facility Admin' : 'Patient'}
-                    </span>
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-[#164FD6] border border-blue-200 truncate">
+                    {currentUser.role === 'DOCTOR' ? 'Doctor · Full Signoff' : currentUser.role === 'NURSE' ? 'Nurse · Intake & Vitals' : currentUser.role === 'HEALTH_WORKER' ? 'CHO · Frontline' : currentUser.role === 'ADMIN' ? 'Facility Admin' : 'Patient'}
+                  </span>
+                  {currentUser.status === 'SUSPENDED' && (
+                    <AccountStatusBadge status="SUSPENDED" variant="sidebar" />
                   )}
                 </div>
                 <div className="flex items-center gap-1 mt-1 text-[10px] text-[#526276] truncate">

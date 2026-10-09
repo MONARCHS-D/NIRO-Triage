@@ -37,6 +37,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { GrantAccessModal } from './GrantAccessModal';
+import { AccountStatusBadge } from '../common/rbac/AccountStatusBadge';
 
 type SettingsTab =
   | 'facility'
@@ -220,17 +221,7 @@ export const SettingsView: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  {currentUser.status === 'SUSPENDED' ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 border border-rose-300">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
-                      Suspended · Access Revoked
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Active Session
-                    </span>
-                  )}
+                  <AccountStatusBadge status={currentUser.status || 'ACTIVE'} variant="credentials" />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -243,11 +234,7 @@ export const SettingsView: React.FC = () => {
                   <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
                     <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">Assigned Clinical Role</span>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${
-                        currentUser.status === 'SUSPENDED'
-                          ? 'bg-rose-100 text-rose-700 line-through'
-                          : 'bg-blue-100 text-[#164FD6]'
-                      }`}>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-[#164FD6]">
                         <Shield className="w-3 h-3" />
                         {currentUser.role === 'DOCTOR'
                           ? 'Medical Officer / Attending Physician'
@@ -259,6 +246,11 @@ export const SettingsView: React.FC = () => {
                           ? 'Community Health Officer (CHO)'
                           : 'Patient Portal'}
                       </span>
+                      {currentUser.status === 'SUSPENDED' && (
+                        <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                          Suspended
+                        </span>
+                      )}
                     </div>
                     <span className="text-[10px] text-[#6B7B8F] block mt-1">System Identifier: <code className="font-mono text-[#2563EB]">{currentUser.id}</code></span>
                   </div>
@@ -283,13 +275,24 @@ export const SettingsView: React.FC = () => {
                 </div>
 
                 {currentUser.status === 'SUSPENDED' ? (
-                  <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-xs flex items-start gap-2.5">
-                    <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                    <div className="space-y-0.5">
-                      <span className="font-bold text-rose-900 block">Critical Notice: Clinical Authority Suspended</span>
-                      <p className="text-rose-700 text-[11px] leading-relaxed">
-                        This practitioner account has been deactivated by Facility Administration. You cannot approve triage cases, accept AI draft summaries, execute inter-facility handoffs, or record clinical intakes. Contact your Medical Superintendent to initiate reinstatement.
+                  <div className="p-3.5 rounded-lg bg-rose-50/80 border border-rose-200 text-xs flex items-start gap-2.5">
+                    <ShieldAlert className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <span className="font-bold text-rose-950 block">Practitioner Account Suspended</span>
+                      <p className="text-rose-800 text-[11px] leading-relaxed">
+                        Clinical write actions are restricted for this practitioner profile. You may continue to view permitted historical patient records, evidence reports, and queue benchmarks. Contact your facility administrator to restore clinical authority.
                       </p>
+                      <div className="pt-1.5 flex flex-wrap gap-2 text-[10px] font-medium text-rose-900">
+                        <span className="px-2 py-0.5 rounded bg-rose-100/90 border border-rose-200">
+                          Clinical access: Suspended
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-rose-100/90 border border-rose-200">
+                          Clinical permissions: Restricted (Read-only)
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-rose-100/90 border border-rose-200">
+                          Reactivation: Facility Administrator required
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ) : (

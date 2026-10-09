@@ -25,6 +25,7 @@ import {
   Sparkles,
   ShieldAlert,
 } from 'lucide-react';
+import { AccessDeniedPanel } from '../common/rbac/AccessDeniedPanel';
 import { consentApi } from '../../lib/api/consent';
 import { caseApi } from '../../lib/api/cases';
 import { evidenceApi } from '../../lib/api/evidence';
@@ -258,20 +259,11 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
 
   if (capabilities.isSuspended || !capabilities.canPerformIntake) {
     return (
-      <div className="bg-white rounded-xl border border-[#E6ECF2] p-8 shadow-xs text-center space-y-4 max-w-lg mx-auto my-12 animate-in fade-in">
-        <div className="w-14 h-14 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200">
-          <ShieldAlert className="w-7 h-7" />
-        </div>
-        <div className="space-y-1">
-          <h2 className="text-lg font-bold text-[#102033]">Clinical Intake Authority Suspended</h2>
-          <p className="text-xs text-[#526276] leading-relaxed">
-            Your practitioner account (<strong>{currentUser.name}</strong>) is currently suspended by Facility Administration. You cannot record patient vitals, capture multimodal symptoms, or initiate triage admissions.
-          </p>
-        </div>
-        <Button variant="secondary" size="md" onClick={onCancel}>
-          Return to Dashboard
-        </Button>
-      </div>
+      <AccessDeniedPanel
+        title="Intake is unavailable"
+        description="Your practitioner account is suspended. New registrations and voice capture are disabled until access is restored."
+        onReturn={onCancel}
+      />
     );
   }
 

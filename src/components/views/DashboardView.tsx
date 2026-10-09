@@ -7,6 +7,8 @@ import { useRole } from '../../context/RoleContext';
 import { KpiCard } from '../common/KpiCard';
 import { PriorityBadge } from '../common/Badge';
 import { Button } from '../common/Button';
+import Link from 'next/link';
+import { RestrictedAction } from '../common/rbac/RestrictedAction';
 import {
   ArrowRight,
   PlusCircle,
@@ -86,33 +88,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
-          <Button
-            variant="primary"
-            size="md"
-            disabled={capabilities.isSuspended || !capabilities.canPerformIntake}
-            title={capabilities.isSuspended ? "Account Suspended: Cannot initiate patient intake" : undefined}
-            onClick={capabilities.isSuspended ? undefined : onNewIntake}
-            icon={<PlusCircle className="w-4 h-4" />}
-          >
-            Start New Intake
-          </Button>
+          <RestrictedAction isRestricted={capabilities.isSuspended} reason="intake">
+            <Button
+              variant="primary"
+              size="md"
+              disabled={capabilities.isSuspended || !capabilities.canPerformIntake}
+              title={!capabilities.isSuspended && !capabilities.canPerformIntake ? "Intake permission required" : undefined}
+              onClick={capabilities.isSuspended || !capabilities.canPerformIntake ? undefined : onNewIntake}
+              icon={<PlusCircle className="w-4 h-4" />}
+            >
+              Start New Intake
+            </Button>
+          </RestrictedAction>
         </div>
       </div>
 
-      {/* Suspension Alert Card */}
+      {/* Compact Suspension Status Panel */}
       {capabilities.isSuspended && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3 shadow-xs animate-in fade-in">
-          <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-rose-900">Clinical Authority Suspended</h3>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-200/80 text-rose-900 uppercase">
-                Locked Out
-              </span>
+        <div className="p-3.5 rounded-xl bg-rose-50/80 border border-rose-200/90 text-rose-950 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-3.5 h-3.5" />
             </div>
-            <p className="text-xs text-rose-700 leading-relaxed">
-              Your practitioner account (<strong>{currentUser.name}</strong>, {currentUser.registrationNumber || currentUser.id}) has been suspended by Facility Administration. You are locked in restricted read-only mode and cannot review cases, perform intake, sign notes, or dispatch referrals.
-            </p>
+            <div>
+              <span className="font-semibold text-rose-950">Clinical authority suspended:</span>{' '}
+              <span className="text-rose-800">You can view permitted records, but clinical actions are currently unavailable.</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">
+              Clinical actions: Restricted
+            </span>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">
+              Account status: Suspended
+            </span>
+            <Link href="/settings" className="font-semibold text-rose-900 hover:underline inline-flex items-center gap-1 ml-1">
+              Explore access details →
+            </Link>
           </div>
         </div>
       )}

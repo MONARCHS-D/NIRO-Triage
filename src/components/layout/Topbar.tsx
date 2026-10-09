@@ -21,6 +21,8 @@ import { SyncOutboxDrawer } from '../common/SyncOutboxDrawer';
 import { NotificationBell } from './NotificationBell';
 import { useNotifications } from '../../context/NotificationContext';
 
+import { AccountStatusBadge } from '../common/rbac/AccountStatusBadge';
+
 export const Topbar: React.FC = () => {
   const {
     currentUser,
@@ -127,15 +129,7 @@ export const Topbar: React.FC = () => {
             <ChevronDown className="w-3 h-3 text-[#164FD6] absolute right-1.5 pointer-events-none" />
           </div>
 
-          {currentUser.status === 'SUSPENDED' && (
-            <span
-              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-300"
-              title="Practitioner credentials suspended by Facility Administration"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
-              SUSPENDED
-            </span>
-          )}
+          <AccountStatusBadge status={currentUser.status || 'ACTIVE'} variant="topbar" />
  
           {/* Triage Notifications & Emergency Arrival Bell */}
           <NotificationBell />

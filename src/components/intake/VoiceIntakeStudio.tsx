@@ -19,6 +19,7 @@ import { Button } from '../common/Button';
 import { LanguageSelector } from '../common/LanguageSelector';
 import { SUPPORTED_LANGUAGES, LanguageOption } from '../../lib/audioSimulator';
 import { Symptom } from '../../types/triage';
+import { useRole } from '../../context/RoleContext';
 
 export type VoiceState =
   | 'IDLE'
@@ -44,6 +45,7 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
   onComplete,
   onSwitchToType,
 }) => {
+  const { capabilities } = useRole();
   const [selectedLang, setSelectedLang] = useState<LanguageOption>(SUPPORTED_LANGUAGES[0]); // Odia default
   const [voiceState, setVoiceState] = useState<VoiceState>('IDLE');
   const [durationSeconds, setDurationSeconds] = useState<number>(0);
@@ -56,6 +58,22 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+
+  // If suspension occurs mid-recording, immediately halt capture and retain state
+  useEffect(() => {
+    if (capabilities.isSuspended && (voiceState === 'LISTENING' || voiceState === 'PAUSED')) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+          mediaRecorderRef.current.stream?.getTracks().forEach((t) => t.stop());
+        } catch {
+          // ignore
+        }
+      }
+      setVoiceState('IDLE');
+    }
+  }, [capabilities.isSuspended, voiceState]);
 
   // Timer loop when listening
   useEffect(() => {

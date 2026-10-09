@@ -13,6 +13,7 @@ import {
   Mail,
   Lock,
   ArrowRight,
+  ShieldAlert,
   Image as ImageIcon,
 } from 'lucide-react';
 
@@ -222,10 +223,36 @@ export default function LoginPage() {
 
               {/* Error Message */}
               {errorMsg && (
-                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span>{errorMsg}</span>
-                </div>
+                errorMsg.includes('Account Suspended') ? (
+                  <div className="p-3.5 rounded-xl bg-rose-50/90 border border-rose-200/90 text-xs text-rose-950 space-y-2 shadow-2xs">
+                    <div className="flex items-center gap-2 font-bold text-rose-900">
+                      <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0" />
+                      <span>Account Access Restricted</span>
+                    </div>
+                    <p className="text-[11px] text-rose-800 leading-relaxed">
+                      {errorMsg}
+                    </p>
+                    <div className="pt-1.5 border-t border-rose-200/60 text-[10px] text-rose-700 flex items-center justify-between">
+                      <span>Next step: Contact Facility Administrator</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setErrorMsg('');
+                          setStaffId('');
+                          setPassword('');
+                        }}
+                        className="font-semibold underline hover:text-rose-900 cursor-pointer"
+                      >
+                        Try another account
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>{errorMsg}</span>
+                  </div>
+                )
               )}
 
               {/* Form */}

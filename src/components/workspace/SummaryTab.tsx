@@ -32,6 +32,7 @@ import { useTriage } from '../../context/TriageContext';
 import { useRole } from '../../context/RoleContext';
 import { ReferralHandoffModal } from './ReferralHandoffModal';
 import { AiDraftReviewModal } from './AiDraftReviewModal';
+import { RestrictedAction } from '../common/rbac/RestrictedAction';
 import { structuringApi } from '../../lib/api/structuring';
 import { aiApi } from '../../lib/api/ai';
 import { retrievalApi } from '../../lib/api/retrieval';
@@ -632,7 +633,10 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
 
               {/* Action Toolbar */}
               <div className="flex flex-wrap items-center gap-2">
-                <div title={!capabilities.canRunAi ? 'Requires Medical Officer authorization to run AI synthesis' : undefined}>
+                <RestrictedAction
+                  isRestricted={isGeneratingAi || !capabilities.canRunAi}
+                  reason={capabilities.isSuspended ? 'ai' : 'Requires Medical Officer authorization to run AI synthesis'}
+                >
                   <Button
                     variant="secondary"
                     size="sm"
@@ -642,7 +646,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                   >
                     {isGeneratingAi ? 'Synthesizing...' : 'Run Advisory AI'}
                   </Button>
-                </div>
+                </RestrictedAction>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -651,7 +655,10 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                 >
                   View changes
                 </Button>
-                <div title={!capabilities.canAcceptDraft ? 'Draft editing requires Medical Officer authorization' : undefined}>
+                <RestrictedAction
+                  isRestricted={!capabilities.canAcceptDraft}
+                  reason={capabilities.isSuspended ? 'draft' : 'Draft editing requires Medical Officer authorization'}
+                >
                   <Button
                     variant="secondary"
                     size="sm"
@@ -661,8 +668,11 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                   >
                     Edit
                   </Button>
-                </div>
-                <div title={!capabilities.canAcceptDraft ? 'Draft acceptance requires Medical Officer sign-off' : undefined}>
+                </RestrictedAction>
+                <RestrictedAction
+                  isRestricted={!capabilities.canAcceptDraft}
+                  reason={capabilities.isSuspended ? 'authority' : 'Draft acceptance requires Medical Officer sign-off'}
+                >
                   <Button
                     variant="primary"
                     size="sm"
@@ -671,7 +681,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                   >
                     Accept draft ▾
                   </Button>
-                </div>
+                </RestrictedAction>
               </div>
             </div>
 
@@ -1246,7 +1256,11 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              <div title={!capabilities.canOverridePriority ? 'Priority overrides require Medical Officer authorization' : undefined}>
+              <RestrictedAction
+                isRestricted={!capabilities.canOverridePriority}
+                reason={capabilities.isSuspended ? 'authority' : 'Priority overrides require Medical Officer authorization'}
+                className="w-full"
+              >
                 <Button
                   variant="secondary"
                   size="md"
@@ -1256,8 +1270,12 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                 >
                   Mark as Low
                 </Button>
-              </div>
-              <div title={!capabilities.canOverridePriority ? 'Priority overrides require Medical Officer authorization' : undefined}>
+              </RestrictedAction>
+              <RestrictedAction
+                isRestricted={!capabilities.canOverridePriority}
+                reason={capabilities.isSuspended ? 'authority' : 'Priority overrides require Medical Officer authorization'}
+                className="w-full"
+              >
                 <Button
                   variant="secondary"
                   size="md"
@@ -1267,8 +1285,12 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                 >
                   Mark as Medium
                 </Button>
-              </div>
-              <div title={!capabilities.canEscalateCase ? 'Case escalation requires Medical Officer authorization' : undefined}>
+              </RestrictedAction>
+              <RestrictedAction
+                isRestricted={!capabilities.canEscalateCase}
+                reason={capabilities.isSuspended ? 'escalate' : 'Case escalation requires Medical Officer authorization'}
+                className="w-full"
+              >
                 <Button
                   variant="outline-destructive"
                   size="md"
@@ -1278,8 +1300,12 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                 >
                   Escalate
                 </Button>
-              </div>
-              <div title={!capabilities.canApproveCase ? 'Official note sign-off requires Medical Officer authorization' : undefined}>
+              </RestrictedAction>
+              <RestrictedAction
+                isRestricted={!capabilities.canApproveCase}
+                reason={capabilities.isSuspended ? 'approval' : 'Official note sign-off requires Medical Officer authorization'}
+                className="w-full"
+              >
                 <Button
                   variant="primary"
                   size="md"
@@ -1290,7 +1316,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                 >
                   Approve Note
                 </Button>
-              </div>
+              </RestrictedAction>
             </div>
 
             {patient.status === 'APPROVED' && (
