@@ -105,7 +105,7 @@ export const AuditLogTab: React.FC<AuditLogTabProps> = ({ patient, workspaceData
           </thead>
           <tbody className="divide-y divide-[#E6ECF2] text-xs">
             {patient.auditLog.map((log) => {
-              const isAi = log.actor.includes('AI') || log.actor.includes('NIRO') || log.actorRole.includes('AI');
+              const isAi = log.actor.includes('AI') || log.actor.includes('CareIntel') || log.actor.includes('NIRO') || log.actorRole.includes('AI');
               const isDoctor = log.actorRole.includes('Doctor') || log.actorRole.includes('Officer');
 
               return (

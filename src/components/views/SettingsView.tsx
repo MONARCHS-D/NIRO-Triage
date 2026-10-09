@@ -44,6 +44,7 @@ export const SettingsView: React.FC = () => {
     setUserRole,
     isOffline,
     setIsOffline,
+    capabilities,
   } = useRole();
   const { resetToDefaults } = useTriage();
 
@@ -101,6 +102,15 @@ export const SettingsView: React.FC = () => {
                   className={`w-4 h-4 ${isActive ? 'text-[#2563EB]' : 'text-[#6B7B8F]'}`}
                 />
                 <span>{tab.label}</span>
+                {tab.id === 'diagnostics' && (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                    capabilities.canAccessDiagnostics
+                      ? 'bg-blue-100 text-[#164FD6]'
+                      : 'bg-slate-100 text-[#6B7B8F]'
+                  }`}>
+                    Admin
+                  </span>
+                )}
               </button>
             );
           })}
@@ -406,9 +416,20 @@ export const SettingsView: React.FC = () => {
 
           {/* TAB 6: ADMIN SYSTEM DIAGNOSTICS */}
           {activeTab === 'diagnostics' && (
-            <div className="space-y-6">
-              {/* Technical Infrastructure Card */}
-              <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-4">
+            !capabilities.canAccessDiagnostics ? (
+              <div className="bg-white rounded-xl border border-[#E6ECF2] p-8 shadow-xs text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-[#102033]">Administrator Authorization Required</h3>
+                <p className="text-xs text-[#526276] max-w-md mx-auto leading-relaxed">
+                  System telemetry, engine diagnostics, and infrastructure configuration are restricted to Facility Administrators. Your active role ({currentUser.title || currentUser.role}) has clinical workstation access.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Technical Infrastructure Card */}
+                <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-[#E6ECF2]">
                   <div className="flex items-center gap-2">
                     <Database className="w-5 h-5 text-[#2563EB]" />
@@ -488,7 +509,8 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
             </div>
-          )}
+          )
+        )}
         </div>
 
         {/* Right Column (4 cols): Facility Context Illustration */}

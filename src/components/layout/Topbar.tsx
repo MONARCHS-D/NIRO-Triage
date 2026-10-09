@@ -116,12 +116,13 @@ export const Topbar: React.FC = () => {
               value={currentUser.role}
               onChange={(e) => setUserRole(e.target.value as UserRole)}
               className="pl-6.5 pr-6 py-1.5 text-xs font-semibold bg-[#E8F0FF] border border-blue-200 rounded-md text-[#164FD6] hover:bg-blue-100 focus:outline-none cursor-pointer appearance-none max-w-[110px] sm:max-w-[150px] xl:max-w-none truncate"
+              title={`Active role: ${currentUser.role} (${currentUser.title})`}
             >
-              <option value="DOCTOR">Doctor (MO)</option>
-              <option value="NURSE">Staff Nurse</option>
-              <option value="HEALTH_WORKER">Health Worker (CHO)</option>
-              <option value="PATIENT">Patient View</option>
-              <option value="ADMIN">Facility Admin</option>
+              <option value="DOCTOR">Doctor (Full Sign-off)</option>
+              <option value="NURSE">Staff Nurse (Intake &amp; Vitals)</option>
+              <option value="HEALTH_WORKER">CHO (Frontline Intake)</option>
+              <option value="PATIENT">Patient (Mobile View)</option>
+              <option value="ADMIN">Facility Admin (System)</option>
             </select>
             <ChevronDown className="w-3 h-3 text-[#164FD6] absolute right-1.5 pointer-events-none" />
           </div>

@@ -54,7 +54,7 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
   onClose,
   onDraftAccepted,
 }) => {
-  const { currentUser } = useRole();
+  const { currentUser, capabilities } = useRole();
   const originalDraft = React.useMemo(() => getPatientAiDraft(patient), [patient]);
   const [activeView, setActiveView] = useState<'diff' | 'edit' | 'reject'>('diff');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -190,6 +190,16 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* RBAC Read-Only Notice */}
+        {!capabilities.canAcceptDraft && (
+          <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 text-xs text-amber-900 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>Read-Only Mode ({currentUser.title || currentUser.role}):</strong> Official AI draft acceptance and modification requires Medical Officer authorization.
+            </span>
+          </div>
+        )}
 
         {/* View Switcher Bar */}
         <div className="px-6 py-2.5 bg-white border-b border-[#E6ECF2] flex items-center justify-between">
@@ -335,7 +345,7 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
               <div className="p-3 rounded-lg bg-blue-50/50 border border-blue-200/60 flex items-center gap-2 text-[11px] text-[#164FD6]">
                 <ShieldCheck className="w-4 h-4 flex-shrink-0" />
                 <span>
-                  Accepting draft records your signature as reviewing clinician. Niro AI acts as a summarization instrument; final medical responsibility rests with the attending medical officer.
+                  Accepting draft records your signature as reviewing clinician. CareIntel AI acts as a summarization instrument; final medical responsibility rests with the attending medical officer.
                 </span>
               </div>
             </div>
@@ -431,40 +441,47 @@ export const AiDraftReviewModal: React.FC<AiDraftReviewModalProps> = ({
 
           <div className="flex items-center gap-2.5">
             {activeView === 'reject' ? (
-              <Button
-                variant="destructive"
-                size="md"
-                disabled={isSubmitting}
-                onClick={handleConfirmReject}
-                icon={isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4" />}
-              >
-                {isSubmitting ? 'Rejecting Draft...' : 'Confirm Rejection'}
-              </Button>
+              <div title={!capabilities.canAcceptDraft ? 'Draft rejection requires Medical Officer authorization' : undefined}>
+                <Button
+                  variant="destructive"
+                  size="md"
+                  disabled={isSubmitting || !capabilities.canAcceptDraft}
+                  onClick={handleConfirmReject}
+                  icon={isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4" />}
+                >
+                  {isSubmitting ? 'Rejecting Draft...' : 'Confirm Rejection'}
+                </Button>
+              </div>
             ) : (
               <>
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={() => setActiveView(activeView === 'edit' ? 'diff' : 'edit')}
-                >
-                  {activeView === 'edit' ? 'Preview Diff' : 'Edit Text'}
-                </Button>
+                <div title={!capabilities.canAcceptDraft ? 'Draft modification requires Medical Officer authorization' : undefined}>
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    disabled={!capabilities.canAcceptDraft}
+                    onClick={() => setActiveView(activeView === 'edit' ? 'diff' : 'edit')}
+                  >
+                    {activeView === 'edit' ? 'Preview Diff' : 'Edit Text'}
+                  </Button>
+                </div>
 
-                <Button
-                  variant="primary"
-                  size="md"
-                  disabled={isSubmitting}
-                  onClick={handleAcceptDraft}
-                  icon={
-                    isSubmitting ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4" />
-                    )
-                  }
-                >
-                  {isSubmitting ? 'Accepting Draft...' : 'Accept Draft'}
-                </Button>
+                <div title={!capabilities.canAcceptDraft ? 'Official draft acceptance requires Medical Officer sign-off' : undefined}>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    disabled={isSubmitting || !capabilities.canAcceptDraft}
+                    onClick={handleAcceptDraft}
+                    icon={
+                      isSubmitting ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )
+                    }
+                  >
+                    {isSubmitting ? 'Accepting Draft...' : 'Accept Draft'}
+                  </Button>
+                </div>
               </>
             )}
           </div>

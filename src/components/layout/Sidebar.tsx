@@ -52,14 +52,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
         <Link
           href="/dashboard"
           className="flex items-center gap-2.5 overflow-hidden"
-          title="NIRO Triage — People First. Care Faster."
+          title="CareIntel — People First. Care Faster."
         >
           <div className="w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center text-white font-bold text-xs shadow-xs tracking-tight shrink-0">
-            NIRO
+            CI
           </div>
           {!isSidebarCollapsed && (
             <div className="min-w-0 transition-opacity duration-150">
-              <h1 className="text-sm font-bold text-[#102033] tracking-tight truncate">NIRO Triage</h1>
+              <h1 className="text-sm font-bold text-[#102033] tracking-tight truncate">CareIntel</h1>
               <p className="text-[11px] text-[#6B7B8F] font-medium leading-none mt-0.5 truncate">People First. Care Faster.</p>
             </div>
           )}
@@ -145,7 +145,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-[#102033] truncate">{currentUser.name}</p>
-                <p className="text-[11px] text-[#6B7B8F] truncate">{currentUser.title}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-[#164FD6] border border-blue-200 truncate">
+                    {currentUser.role === 'DOCTOR' ? 'Doctor · Full Signoff' : currentUser.role === 'NURSE' ? 'Nurse · Intake & Vitals' : currentUser.role === 'HEALTH_WORKER' ? 'CHO · Frontline' : currentUser.role === 'ADMIN' ? 'Facility Admin' : 'Patient'}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1 mt-1 text-[10px] text-[#526276] truncate">
                   <Hospital className="w-3 h-3 flex-shrink-0" />
                   <span className="truncate">{currentFacility.name}</span>

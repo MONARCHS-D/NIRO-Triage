@@ -200,10 +200,10 @@ export const PatientMobileExperience: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-md bg-[#2563EB] text-white font-bold flex items-center justify-center text-[10px] tracking-tight">
-              NIRO
+              CI
             </div>
             <div>
-              <h1 className="text-sm font-bold text-[#102033]">NIRO Triage</h1>
+              <h1 className="text-sm font-bold text-[#102033]">CareIntel</h1>
               <p className="text-[10px] text-[#6B7B8F]">Government Health Facility Portal</p>
             </div>
           </div>

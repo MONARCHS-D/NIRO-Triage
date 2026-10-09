@@ -128,11 +128,11 @@ export default function LoginPage() {
       <header className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-10 lg:px-14 pt-4 sm:pt-6 pb-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 border border-blue-400/30">
-            NIRO
+            CI
           </div>
           <div>
-            <span className="text-lg font-bold tracking-tight text-[#102033] block">NIRO Triage</span>
-            <span className="text-[11px] font-medium text-slate-500 tracking-wide">People First. Care Faster.</span>
+            <span className="text-lg font-bold tracking-tight text-[#102033] block">CareIntel</span>
+            <span className="text-[11px] font-medium text-slate-500 tracking-wide">Intelligent Clinical Triage Workstation</span>
           </div>
         </div>
 

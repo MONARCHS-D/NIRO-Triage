@@ -50,7 +50,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
   onNavigateToTab,
 }) => {
   const { setPatientPriority, approvePatientNote, escalatePatientCase } = useTriage();
-  const { currentUser } = useRole();
+  const { currentUser, capabilities } = useRole();
 
   // Modals & States
   const [showDraftModal, setShowDraftModal] = useState(false);
@@ -632,15 +632,17 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
 
               {/* Action Toolbar */}
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleRunAdvisoryAI}
-                  disabled={isGeneratingAi}
-                  icon={<Sparkles className={`w-3.5 h-3.5 text-[#2563EB] ${isGeneratingAi ? 'animate-spin' : ''}`} />}
-                >
-                  {isGeneratingAi ? 'Synthesizing...' : 'Run Advisory AI'}
-                </Button>
+                <div title={!capabilities.canRunAi ? 'Requires Medical Officer authorization to run AI synthesis' : undefined}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRunAdvisoryAI}
+                    disabled={isGeneratingAi || !capabilities.canRunAi}
+                    icon={<Sparkles className={`w-3.5 h-3.5 text-[#2563EB] ${isGeneratingAi ? 'animate-spin' : ''}`} />}
+                  >
+                    {isGeneratingAi ? 'Synthesizing...' : 'Run Advisory AI'}
+                  </Button>
+                </div>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -649,21 +651,27 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                 >
                   View changes
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowDraftModal(true)}
-                  icon={<Edit3 className="w-3.5 h-3.5" />}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setShowDraftModal(true)}
-                >
-                  Accept draft ▾
-                </Button>
+                <div title={!capabilities.canAcceptDraft ? 'Draft editing requires Medical Officer authorization' : undefined}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!capabilities.canAcceptDraft}
+                    onClick={() => setShowDraftModal(true)}
+                    icon={<Edit3 className="w-3.5 h-3.5" />}
+                  >
+                    Edit
+                  </Button>
+                </div>
+                <div title={!capabilities.canAcceptDraft ? 'Draft acceptance requires Medical Officer sign-off' : undefined}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={!capabilities.canAcceptDraft}
+                    onClick={() => setShowDraftModal(true)}
+                  >
+                    Accept draft ▾
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -1110,22 +1118,34 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
               </button>
 
               <button
+                disabled={!capabilities.canReferHandoff}
                 onClick={() => setShowHandoffModal(true)}
-                className="w-full p-2.5 rounded-lg border border-[#E6ECF2] hover:bg-[#F8FAFC] hover:border-slate-300 text-left text-xs font-semibold text-[#102033] flex items-center justify-between transition-colors cursor-pointer"
+                title={!capabilities.canReferHandoff ? 'Referral dispatch requires Doctor / Medical Officer authorization' : undefined}
+                className={`w-full p-2.5 rounded-lg border border-[#E6ECF2] text-left text-xs font-semibold flex items-center justify-between transition-colors ${
+                  !capabilities.canReferHandoff
+                    ? 'opacity-50 cursor-not-allowed bg-slate-50 text-slate-400'
+                    : 'hover:bg-[#F8FAFC] hover:border-slate-300 text-[#102033] cursor-pointer'
+                }`}
               >
                 <span className="flex items-center gap-2">
-                  <Share2 className="w-4 h-4 text-[#2563EB]" />
+                  <Share2 className={`w-4 h-4 ${!capabilities.canReferHandoff ? 'text-slate-400' : 'text-[#2563EB]'}`} />
                   <span>Refer / Handoff</span>
                 </span>
                 <ChevronRight className="w-4 h-4 text-[#6B7B8F]" />
               </button>
 
               <button
+                disabled={!capabilities.canApproveCase}
                 onClick={() => setShowApprovalDialog(true)}
-                className="w-full p-2.5 rounded-lg border border-[#E6ECF2] hover:bg-[#F8FAFC] hover:border-slate-300 text-left text-xs font-semibold text-[#102033] flex items-center justify-between transition-colors cursor-pointer"
+                title={!capabilities.canApproveCase ? 'Official case review note requires Medical Officer authorization' : undefined}
+                className={`w-full p-2.5 rounded-lg border border-[#E6ECF2] text-left text-xs font-semibold flex items-center justify-between transition-colors ${
+                  !capabilities.canApproveCase
+                    ? 'opacity-50 cursor-not-allowed bg-slate-50 text-slate-400'
+                    : 'hover:bg-[#F8FAFC] hover:border-slate-300 text-[#102033] cursor-pointer'
+                }`}
               >
                 <span className="flex items-center gap-2">
-                  <FileCheck2 className="w-4 h-4 text-emerald-600" />
+                  <FileCheck2 className={`w-4 h-4 ${!capabilities.canApproveCase ? 'text-slate-400' : 'text-emerald-600'}`} />
                   <span>Add reviewer note</span>
                 </span>
                 <ChevronRight className="w-4 h-4 text-[#6B7B8F]" />
@@ -1226,35 +1246,51 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setPatientPriority(patient.id, 'GREEN', 'Marked Routine by Reviewer')}
-              >
-                Mark as Low
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setPatientPriority(patient.id, 'YELLOW', 'Marked Medium by Reviewer')}
-              >
-                Mark as Medium
-              </Button>
-              <Button
-                variant="outline-destructive"
-                size="md"
-                onClick={() => escalatePatientCase(patient.id, 'Escalated from summary decision bar')}
-              >
-                Escalate
-              </Button>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => setShowApprovalDialog(true)}
-                icon={<Send className="w-3.5 h-3.5" />}
-              >
-                Approve Note
-              </Button>
+              <div title={!capabilities.canOverridePriority ? 'Priority overrides require Medical Officer authorization' : undefined}>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  fullWidth
+                  disabled={!capabilities.canOverridePriority}
+                  onClick={() => setPatientPriority(patient.id, 'GREEN', 'Marked Routine by Reviewer')}
+                >
+                  Mark as Low
+                </Button>
+              </div>
+              <div title={!capabilities.canOverridePriority ? 'Priority overrides require Medical Officer authorization' : undefined}>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  fullWidth
+                  disabled={!capabilities.canOverridePriority}
+                  onClick={() => setPatientPriority(patient.id, 'YELLOW', 'Marked Medium by Reviewer')}
+                >
+                  Mark as Medium
+                </Button>
+              </div>
+              <div title={!capabilities.canEscalateCase ? 'Case escalation requires Medical Officer authorization' : undefined}>
+                <Button
+                  variant="outline-destructive"
+                  size="md"
+                  fullWidth
+                  disabled={!capabilities.canEscalateCase}
+                  onClick={() => escalatePatientCase(patient.id, 'Escalated from summary decision bar')}
+                >
+                  Escalate
+                </Button>
+              </div>
+              <div title={!capabilities.canApproveCase ? 'Official note sign-off requires Medical Officer authorization' : undefined}>
+                <Button
+                  variant="primary"
+                  size="md"
+                  fullWidth
+                  disabled={!capabilities.canApproveCase}
+                  onClick={() => setShowApprovalDialog(true)}
+                  icon={<Send className="w-3.5 h-3.5" />}
+                >
+                  Approve Note
+                </Button>
+              </div>
             </div>
 
             {patient.status === 'APPROVED' && (

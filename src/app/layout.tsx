@@ -3,9 +3,9 @@ import './globals.css';
 import { Providers } from '../components/providers/Providers';
 
 export const metadata: Metadata = {
-  title: 'NIRO Triage — Multimodal Healthcare Triage-Support Platform',
+  title: 'CareIntel — Multimodal Healthcare Triage-Support Platform',
   description:
-    'Human-in-the-loop multimodal healthcare triage-support prototype for government and institutional health facilities in India. Fast information. Clear evidence. Human judgment.',
+    'Human-in-the-loop multimodal healthcare triage-support platform for government and institutional health facilities in India. Fast information. Clear evidence. Human judgment.',
 };
 
 export default function RootLayout({

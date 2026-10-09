@@ -1,10 +1,95 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Facility, UserProfile, UserRole } from '../types/roles';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { Facility, PermissionCode, RoleCapabilities, UserProfile, UserRole } from '../types/roles';
 import { INITIAL_FACILITIES, INITIAL_USERS } from '../lib/syntheticData';
 import { authApi } from '../lib/api/auth';
 import { getAuthToken, setAuthToken } from '../lib/api/client';
+
+export const ROLE_PERMISSIONS: Record<UserRole, PermissionCode[]> = {
+  DOCTOR: [
+    'consent:read',
+    'consent:write',
+    'case:read',
+    'case:write',
+    'evidence:read',
+    'evidence:write',
+    'processing:read',
+    'processing:write',
+    'structuring:read',
+    'structuring:write',
+    'knowledge:read',
+    'knowledge:write',
+    'ai:read',
+    'ai:write',
+    'review:read',
+    'review:write',
+    'review:assign',
+    'escalation:read',
+    'escalation:write',
+    'referral:read',
+    'referral:write',
+    'handoff:read',
+    'handoff:write',
+  ],
+  NURSE: [
+    'consent:read',
+    'consent:write',
+    'case:read',
+    'case:write',
+    'evidence:read',
+    'evidence:write',
+    'processing:read',
+    'structuring:read',
+    'review:read',
+    'review:write',
+    'knowledge:read',
+  ],
+  HEALTH_WORKER: [
+    'consent:read',
+    'consent:write',
+    'case:read',
+    'case:write',
+    'evidence:read',
+    'evidence:write',
+    'processing:read',
+    'structuring:read',
+    'review:write',
+  ],
+  ADMIN: [
+    'manage:users',
+    'manage:system',
+    'consent:read',
+    'consent:write',
+    'case:read',
+    'case:write',
+    'evidence:read',
+    'evidence:write',
+    'processing:read',
+    'processing:write',
+    'structuring:read',
+    'structuring:write',
+    'knowledge:read',
+    'knowledge:write',
+    'ai:read',
+    'ai:write',
+    'review:read',
+    'review:write',
+    'review:assign',
+    'escalation:read',
+    'escalation:write',
+    'referral:read',
+    'referral:write',
+    'handoff:read',
+    'handoff:write',
+    'recipient:manage',
+  ],
+  PATIENT: [
+    'consent:read',
+    'consent:write',
+    'case:read',
+  ],
+};
 
 interface RoleContextType {
   currentUser: UserProfile;
@@ -16,11 +101,15 @@ interface RoleContextType {
   isAuthenticated: boolean;
   isSessionExpired: boolean;
   isSidebarCollapsed: boolean;
+  capabilities: RoleCapabilities;
+  permissions: PermissionCode[];
+  hasPermission: (perm: PermissionCode) => boolean;
   setIsSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   setCurrentUser: (user: UserProfile) => void;
   setCurrentFacility: (facility: Facility) => void;
   setUserRole: (role: UserRole) => void;
+  exitPatientMobile: () => void;
   setViewMode: (mode: 'REVIEWER_DESKTOP' | 'PATIENT_MOBILE') => void;
   setIsOffline: (offline: boolean) => void;
   login: (staffIdOrEmail: string, password?: string) => Promise<boolean>;
@@ -30,7 +119,10 @@ interface RoleContextType {
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
-const AUTH_STORAGE_KEY = 'niro_auth_state_v1';
+const AUTH_STORAGE_KEY = 'careintel_auth_state_v1';
+const LEGACY_AUTH_STORAGE_KEY = 'niro_auth_state_v1';
+const SIDEBAR_STORAGE_KEY = 'careintel_sidebar_collapsed';
+const LEGACY_SIDEBAR_STORAGE_KEY = 'niro_sidebar_collapsed';
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile>(INITIAL_USERS[0]);
@@ -38,10 +130,11 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [facilities] = useState<Facility[]>(INITIAL_FACILITIES);
   const [users] = useState<UserProfile[]>(INITIAL_USERS);
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
+  const [lastStaffRole, setLastStaffRole] = useState<UserRole>('DOCTOR');
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY) ?? localStorage.getItem(LEGACY_AUTH_STORAGE_KEY);
       return stored !== 'false';
     }
     return true;
@@ -49,7 +142,8 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('niro_sidebar_collapsed') === 'true';
+      const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY) ?? localStorage.getItem(LEGACY_SIDEBAR_STORAGE_KEY);
+      return stored === 'true';
     }
     return false;
   });
@@ -58,7 +152,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     setIsSidebarCollapsed((prev) => {
       const next = !prev;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('niro_sidebar_collapsed', String(next));
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
       }
       return next;
     });
@@ -70,11 +164,55 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(matched);
       if (role === 'PATIENT') {
         setViewMode('PATIENT_MOBILE');
-      } else if (viewMode === 'PATIENT_MOBILE') {
-        setViewMode('REVIEWER_DESKTOP');
+      } else {
+        setLastStaffRole(role);
+        if (viewMode === 'PATIENT_MOBILE') {
+          setViewMode('REVIEWER_DESKTOP');
+        }
       }
     }
   }, [users, viewMode]);
+
+  const exitPatientMobile = useCallback(() => {
+    setViewMode('REVIEWER_DESKTOP');
+    const targetRole = lastStaffRole && lastStaffRole !== 'PATIENT' ? lastStaffRole : 'DOCTOR';
+    const matched = users.find((u) => u.role === targetRole);
+    if (matched) {
+      setCurrentUser(matched);
+    }
+  }, [lastStaffRole, users]);
+
+  const permissions = useMemo<PermissionCode[]>(() => {
+    return currentUser.permissions && currentUser.permissions.length > 0
+      ? currentUser.permissions
+      : ROLE_PERMISSIONS[currentUser.role] || [];
+  }, [currentUser]);
+
+  const hasPermission = useCallback((perm: PermissionCode): boolean => {
+    return permissions.includes(perm);
+  }, [permissions]);
+
+  const capabilities = useMemo<RoleCapabilities>(() => {
+    const role = currentUser.role;
+    const isDoc = role === 'DOCTOR';
+    const isAdmin = role === 'ADMIN';
+    const isNurse = role === 'NURSE';
+    const isCHO = role === 'HEALTH_WORKER';
+
+    return {
+      canApproveCase: (isDoc || isAdmin) && hasPermission('review:write'),
+      canReferHandoff: (isDoc || isAdmin) && hasPermission('referral:write') && hasPermission('handoff:write'),
+      canEscalateCase: (isDoc || isAdmin) && hasPermission('escalation:write'),
+      canOverridePriority: (isDoc || isAdmin) && hasPermission('escalation:write'),
+      canRunAi: (isDoc || isAdmin) && hasPermission('ai:write'),
+      canAcceptDraft: (isDoc || isAdmin) && hasPermission('ai:write'),
+      canManageSettings: isAdmin || hasPermission('manage:system'),
+      canAccessDiagnostics: isAdmin || hasPermission('manage:system'),
+      canPerformIntake: hasPermission('case:write'),
+      canViewReports: hasPermission('evidence:read') || isDoc || isNurse || isCHO || isAdmin,
+      canAssignReview: (isDoc || isAdmin) && hasPermission('review:assign'),
+    };
+  }, [currentUser.role, hasPermission]);
 
   // Initial load: check token and validate session with backend
   useEffect(() => {
@@ -206,11 +344,15 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated,
         isSessionExpired,
         isSidebarCollapsed,
+        capabilities,
+        permissions,
+        hasPermission,
         setIsSidebarCollapsed,
         toggleSidebar,
         setCurrentUser,
         setCurrentFacility,
         setUserRole,
+        exitPatientMobile,
         setViewMode,
         setIsOffline,
         login,

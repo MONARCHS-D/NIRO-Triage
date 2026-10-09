@@ -41,8 +41,10 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const NOTIFICATIONS_STORAGE_KEY = 'niro_triage_notifications_v2';
-const SOUND_STORAGE_KEY = 'niro_triage_sound_enabled_v1';
+const NOTIFICATIONS_STORAGE_KEY = 'careintel_triage_notifications_v2';
+const LEGACY_NOTIFICATIONS_STORAGE_KEY = 'niro_triage_notifications_v2';
+const SOUND_STORAGE_KEY = 'careintel_triage_sound_enabled_v1';
+const LEGACY_SOUND_STORAGE_KEY = 'niro_triage_sound_enabled_v1';
 
 export function parseVitalsToEvidence(vitalsSnippet?: string): VitalEvidenceItem[] {
   if (!vitalsSnippet) return [];
@@ -228,7 +230,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [notifications, setNotifications] = useState<TriageNotification[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+        const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY) ?? localStorage.getItem(LEGACY_NOTIFICATIONS_STORAGE_KEY);
         if (saved) return JSON.parse(saved);
       } catch (e) {
         console.error('Failed to load notifications:', e);
@@ -242,7 +244,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(SOUND_STORAGE_KEY);
+        const saved = localStorage.getItem(SOUND_STORAGE_KEY) ?? localStorage.getItem(LEGACY_SOUND_STORAGE_KEY);
         if (saved !== null) return JSON.parse(saved);
       } catch (e) {
         console.error('Failed to load sound setting:', e);

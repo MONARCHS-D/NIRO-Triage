@@ -1,4 +1,4 @@
-# NIRO-Triage — Intelligent Clinical Triage & Operations Workstation
+# CareIntel — Intelligent Clinical Triage & Operations Workstation
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.3-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.2-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
@@ -13,7 +13,7 @@
 
 > [!IMPORTANT]
 > **Non-Diagnostic Clinical Safety Principle:**  
-> NIRO-Triage and CareIntel are strictly **non-diagnostic advisory tools**. All AI proposals, transcriptions, and draft notes are treated as provisional suggestions. Final approval, clinical classification, emergency escalation, and handoff decisions remain exclusively under the authority of licensed human clinicians.
+> CareIntel is strictly a **non-diagnostic advisory tool**. All AI proposals, transcriptions, and draft notes are treated as provisional suggestions. Final approval, clinical classification, emergency escalation, and handoff decisions remain exclusively under the authority of licensed human clinicians.
 
 ---
 

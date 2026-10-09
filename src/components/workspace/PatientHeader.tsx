@@ -17,6 +17,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { useTriage } from '../../context/TriageContext';
+import { useRole } from '../../context/RoleContext';
 import { ReferralHandoffModal } from './ReferralHandoffModal';
 
 interface PatientHeaderProps {
@@ -35,6 +36,7 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
   onRefreshWorkspace,
 }) => {
   const { escalatePatientCase, approvePatientNote } = useTriage();
+  const { capabilities } = useRole();
   const [showEscalateModal, setShowEscalateModal] = useState(false);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [showDetailsMenu, setShowDetailsMenu] = useState(false);
@@ -180,24 +182,30 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
             </Button>
           )}
 
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => setShowHandoffModal(true)}
-            icon={<Share2 className="w-3.5 h-3.5 text-[#2563EB]" />}
-          >
-            Refer / Handoff
-          </Button>
+          <div title={!capabilities.canReferHandoff ? 'Referral dispatch requires Doctor / Medical Officer authorization' : undefined}>
+            <Button
+              variant="secondary"
+              size="md"
+              disabled={!capabilities.canReferHandoff}
+              onClick={() => setShowHandoffModal(true)}
+              icon={<Share2 className="w-3.5 h-3.5 text-[#2563EB]" />}
+            >
+              Refer / Handoff
+            </Button>
+          </div>
 
           {patient.status !== 'APPROVED' ? (
-            <Button
-              variant="primary"
-              size="md"
-              onClick={handleMarkReviewed}
-              icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-            >
-              Mark as reviewed
-            </Button>
+            <div title={!capabilities.canApproveCase ? 'Official case review sign-off requires Medical Officer authorization' : undefined}>
+              <Button
+                variant="primary"
+                size="md"
+                disabled={!capabilities.canApproveCase}
+                onClick={handleMarkReviewed}
+                icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+              >
+                Mark as reviewed
+              </Button>
+            </div>
           ) : (
             <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />

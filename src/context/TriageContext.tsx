@@ -51,14 +51,15 @@ interface TriageContextType {
 
 const TriageContext = createContext<TriageContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'niro_triage_patients_v1';
+const STORAGE_KEY = 'careintel_triage_patients_v1';
+const LEGACY_STORAGE_KEY = 'niro_triage_patients_v1';
 
 export function TriageProvider({ children }: { children: React.ReactNode }) {
   const { currentUser, currentFacility } = useRole();
   const [patients, setPatients] = useState<Patient[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
+        const saved = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
         if (saved) {
           return JSON.parse(saved);
         }
@@ -75,11 +76,12 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  const OUTBOX_STORAGE_KEY = 'niro_triage_outbox_v1';
+  const OUTBOX_STORAGE_KEY = 'careintel_triage_outbox_v1';
+  const LEGACY_OUTBOX_STORAGE_KEY = 'niro_triage_outbox_v1';
   const [outbox, setOutbox] = useState<OutboxRecord[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(OUTBOX_STORAGE_KEY);
+        const saved = localStorage.getItem(OUTBOX_STORAGE_KEY) ?? localStorage.getItem(LEGACY_OUTBOX_STORAGE_KEY);
         if (saved) return JSON.parse(saved);
       } catch (e) {
         console.error('Failed to load outbox from local storage:', e);

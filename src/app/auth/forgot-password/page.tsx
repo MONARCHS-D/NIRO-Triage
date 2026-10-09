@@ -21,7 +21,7 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-[420px] bg-white rounded-xl border border-[#E6ECF2] shadow-sm p-6 sm:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200">
         <div className="text-center space-y-1">
           <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-[#2563EB] text-white font-bold text-sm shadow-xs mb-1">
-            NIRO
+            CI
           </div>
           <h1 className="text-xl font-bold text-[#102033] tracking-tight">Reset your password</h1>
           <p className="text-xs text-[#526276]">

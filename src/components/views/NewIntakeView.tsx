@@ -471,7 +471,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                 Regional Speech &amp; Voice Intake
               </h4>
               <p className="text-xs text-[#526276] mt-1 leading-relaxed">
-                Patients can speak naturally in their mother tongue. NIRO transcribes and structures chief complaints directly.
+                Patients can speak naturally in their mother tongue. CareIntel transcribes and structures chief complaints directly.
               </p>
 
               {/* Native Language Badges rendered in React per Section 6.1 */}
