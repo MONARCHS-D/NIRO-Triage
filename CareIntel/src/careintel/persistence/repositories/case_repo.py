@@ -22,6 +22,21 @@ class CaseRepository:
     async def get_by_id(self, case_id: uuid.UUID) -> CaseORM | None:
         return await self.session.get(CaseORM, case_id)
 
+    async def list_recent(
+        self,
+        *,
+        facility_ids: set[uuid.UUID] | None,
+        limit: int,
+        offset: int,
+    ) -> list[CaseORM]:
+        stmt = select(CaseORM).order_by(CaseORM.created_at.desc(), CaseORM.id.desc())
+        if facility_ids is not None:
+            if not facility_ids:
+                return []
+            stmt = stmt.where(CaseORM.facility_id.in_(facility_ids))
+        result = await self.session.execute(stmt.limit(limit).offset(offset))
+        return list(result.scalars().all())
+
     async def get_for_update(self, case_id: uuid.UUID, expected_version: int) -> CaseORM | None:
         """
         Get case with pessimistic lock (SELECT ... FOR UPDATE).

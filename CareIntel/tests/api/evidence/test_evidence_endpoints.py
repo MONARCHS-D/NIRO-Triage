@@ -187,3 +187,39 @@ async def test_generate_sas_url(api_client: AsyncClient, mock_evidence_service: 
     data = response.json()
     assert data["download_url"] == "https://example.com/sas?token=123"
     assert "expires_at" in data
+
+
+@pytest.mark.api
+async def test_ocr_endpoint_does_not_fake_extraction_without_live_provider(
+    api_client: AsyncClient, app_with_mocks: FastAPI
+) -> None:
+    from types import SimpleNamespace
+
+    from careintel.api.deps import get_consent_service, get_ocr_provider
+    from careintel.infrastructure.ocr.demo_provider import DemoOcrProvider
+
+    consent_id = uuid.uuid4()
+    ai_consent_id = uuid.uuid4()
+    subject_id = uuid.uuid4()
+    consent_service = AsyncMock()
+    consent_service.require_active.side_effect = [
+        SimpleNamespace(id=consent_id),
+        SimpleNamespace(id=ai_consent_id),
+    ]
+    app_with_mocks.dependency_overrides[get_ocr_provider] = lambda: DemoOcrProvider()
+    app_with_mocks.dependency_overrides[get_consent_service] = lambda: consent_service
+    response = await api_client.post(
+        "/api/v1/evidence/ocr-extract",
+        data={
+            "synthetic_subject_id": str(subject_id),
+            "consent_id": str(consent_id),
+            "ai_consent_id": str(ai_consent_id),
+        },
+        files={"file": ("synthetic-report.pdf", b"%PDF-1.4 synthetic test", "application/pdf")},
+        headers={"Authorization": "Bearer fake_token"},
+    )
+
+    assert response.status_code == 503
+    assert "synthetic sample" in response.json()["error"]["message"]
+    app_with_mocks.dependency_overrides.pop(get_ocr_provider, None)
+    app_with_mocks.dependency_overrides.pop(get_consent_service, None)

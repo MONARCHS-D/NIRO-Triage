@@ -36,6 +36,19 @@ class ConsentRepository:
         """Get consent record by ID."""
         return await self.session.get(ConsentORM, consent_id)
 
+    async def get_by_subject_purpose_version(
+        self, subject_id: uuid.UUID, purpose: str, notice_version: str
+    ) -> ConsentORM | None:
+        """Get the unique consent record for a subject, purpose, and notice version."""
+        stmt = (
+            select(ConsentORM)
+            .where(ConsentORM.subject_id == subject_id)
+            .where(ConsentORM.purpose == purpose)
+            .where(ConsentORM.notice_version == notice_version)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def create(
         self,
         consent: ConsentORM,

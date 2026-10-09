@@ -1,0 +1,126 @@
+{
+  "consoleErrors": [],
+  "networkCalls": [
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/auth/login",
+      "status": 200,
+      "text": ""
+    },
+    {
+      "method": "POST",
+      "url": "http://localhost:8000/api/v1/auth/login",
+      "status": 200,
+      "text": "{\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjMWRmNGRhZS1lNDIxLTRjZGItYjlmZi1lNTgyM2M0OTRmODgiLCJzaWQiOiI4ZmI4NjA1Yi1kYjZjLTQyODItOTk1NC05NjVmNmE2NGY5NjQiLCJqdGkiOiIwMU00SDEwOUdSMV"
+    },
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "text": ""
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "text": "{\"id\":\"c1df4dae-e421-4cdb-b9ff-e5823c494f88\",\"is_active\":true,\"roles\":[\"nurse\"],\"permissions\":[\"processing:write\",\"case:write\",\"evidence:read\",\"structuring:read\",\"case:read\",\"consent:write\",\"evidence:"
+    },
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "text": ""
+    },
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/cases?limit=100",
+      "status": 200,
+      "text": ""
+    },
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "text": ""
+    },
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/cases?limit=100",
+      "status": 200,
+      "text": ""
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "text": "{\"status\":\"ready\",\"checks\":{\"database\":\"ok\",\"redis\":\"ok\",\"blob_storage\":\"ok\"},\"latency_ms\":1780.13}"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/cases?limit=100",
+      "status": 200,
+      "text": "[{\"case_id\":\"13705d09-6be4-4c89-b915-d784e69a8a5f\",\"synthetic_subject_id\":\"4a376893-ead5-403f-8f2b-5b08bd8dd490\",\"facility_id\":null,\"state\":\"REVIEW_PENDING\",\"version\":6,\"opened_by\":\"12f7eca7-106f-466f"
+    },
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/queue",
+      "status": 200,
+      "text": ""
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "text": "{\"status\":\"ready\",\"checks\":{\"database\":\"ok\",\"redis\":\"ok\",\"blob_storage\":\"ok\"},\"latency_ms\":1873.88}"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "text": "{\"status\":\"ready\",\"checks\":{\"database\":\"ok\",\"redis\":\"ok\",\"blob_storage\":\"ok\"},\"latency_ms\":1806.73}"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/cases?limit=100",
+      "status": 200,
+      "text": "[{\"case_id\":\"13705d09-6be4-4c89-b915-d784e69a8a5f\",\"synthetic_subject_id\":\"4a376893-ead5-403f-8f2b-5b08bd8dd490\",\"facility_id\":null,\"state\":\"REVIEW_PENDING\",\"version\":6,\"opened_by\":\"12f7eca7-106f-466f"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/queue",
+      "status": 200,
+      "text": "[{\"id\":\"10ee472b-798a-492f-8386-8f3c71945fa1\",\"case_id\":\"13705d09-6be4-4c89-b915-d784e69a8a5f\",\"encounter_id\":null,\"status\":\"PENDING_ASSIGNMENT\",\"assigned_reviewer_id\":null,\"priority_bucket\":\"DEFAULT\""
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "text": "{\"status\":\"ready\",\"checks\":{\"database\":\"ok\",\"redis\":\"ok\",\"blob_storage\":\"ok\"},\"latency_ms\":1829.5}"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "text": "{\"status\":\"ready\",\"checks\":{\"database\":\"ok\",\"redis\":\"ok\",\"blob_storage\":\"ok\"},\"latency_ms\":1770.74}"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/cases?limit=100",
+      "status": 200,
+      "text": "[{\"case_id\":\"13705d09-6be4-4c89-b915-d784e69a8a5f\",\"synthetic_subject_id\":\"4a376893-ead5-403f-8f2b-5b08bd8dd490\",\"facility_id\":null,\"state\":\"REVIEW_PENDING\",\"version\":6,\"opened_by\":\"12f7eca7-106f-466f"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/queue",
+      "status": 200,
+      "text": ""
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/cases?limit=100",
+      "status": 200,
+      "text": ""
+    }
+  ],
+  "steps": []
+}

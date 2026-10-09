@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Image from 'next/image';
 import { Button } from '../common/Button';
 import { VoiceIntakeStudio } from '../intake/VoiceIntakeStudio';
@@ -18,19 +18,15 @@ import {
   CheckCircle2,
   ArrowRight,
   ArrowLeft,
-  User,
   ShieldCheck,
-  FileCheck,
   Loader2,
   Sparkles,
-  ShieldAlert,
 } from 'lucide-react';
 import { AccessDeniedPanel } from '../common/rbac/AccessDeniedPanel';
 import { consentApi } from '../../lib/api/consent';
 import { caseApi } from '../../lib/api/cases';
 import { evidenceApi } from '../../lib/api/evidence';
 import { processingApi } from '../../lib/api/processing';
-import { structuringApi } from '../../lib/api/structuring';
 import { reviewApi } from '../../lib/api/review';
 
 interface NewIntakeViewProps {
@@ -43,7 +39,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
   onCancel,
 }) => {
   const { addPatient, addOutboxItem } = useTriage();
-  const { currentFacility, isOffline, capabilities, currentUser } = useRole();
+  const { currentFacility, isOffline, capabilities } = useRole();
   const { notifyArrival } = useNotifications();
 
   // Stepper: 1 Patient Info -> 2 Input Details -> 3 Review
@@ -68,97 +64,201 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
     symptoms: Symptom[];
   } | null>(null);
   const [extractedFacts, setExtractedFacts] = useState<ExtractedFact[]>([]);
+  const [reportFile, setReportFile] = useState<File | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [ocrConsentContext, setOcrConsentContext] = useState<{
+    subjectId: string;
+    consentId: string;
+    aiConsentId: string;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isAdvancingStep, setIsAdvancingStep] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const pendingBackendRef = useRef<{
+    subjectId: string;
+    consentId?: string;
+    aiConsentId?: string;
+    caseId?: string;
+    version?: number;
+    textEvidenceId?: string;
+    attachmentEvidenceId?: string;
+    processingStarted?: boolean;
+    queueEntered?: boolean;
+  } | null>(null);
 
   const handleLoadBenchmarkDemo = () => {
-    setName('Kamala Barik');
+    setName('Demo Patient');
     setAge('38');
     setGender('Female');
     setPrimaryLanguage('Odia (ଓଡ଼ିଆ)');
-    setContact('+91 94371 28912');
+    setContact('');
     setTypedComplaint('Severe bilateral knee pain and swelling for 4 days, difficulty bearing weight in the morning.');
     setConsentGranted(true);
   };
 
-  const handleNextFromStep1 = () => {
-    if (!consentGranted) {
+  const advanceToInput = async (consentAccepted = false) => {
+    if (isAdvancingStep) return;
+    if (!consentGranted && !consentAccepted) {
       setShowConsentModal(true);
       return;
     }
-    setCurrentStep(2);
+    setIsAdvancingStep(true);
+    setSubmissionError(null);
+    try {
+      if (!isOffline) {
+        const pending = pendingBackendRef.current || {
+          subjectId: typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `00000000-0000-4000-8000-${Math.floor(Math.random() * 0xffffffffffff).toString(16).padStart(12, '0')}`,
+        };
+        pendingBackendRef.current = pending;
+        try {
+          if (!pending.consentId) {
+            const consent = await consentApi.requestAndCapture(pending.subjectId, 'data_processing', '1.0');
+            pending.consentId = consent.id;
+          }
+          if (!pending.aiConsentId) {
+            const aiConsent = await consentApi.requestAndCapture(pending.subjectId, 'ai_analysis', '1.0');
+            pending.aiConsentId = aiConsent.id;
+          }
+          setOcrConsentContext({
+            subjectId: pending.subjectId,
+            consentId: pending.consentId,
+            aiConsentId: pending.aiConsentId,
+          });
+        } catch (error: unknown) {
+          setSubmissionError(error instanceof Error ? error.message : 'Consent could not be recorded. Retry before entering patient information.');
+          return;
+        }
+      }
+      setCurrentStep(2);
+    } finally {
+      setIsAdvancingStep(false);
+    }
+  };
+
+  const handleNextFromStep1 = () => void advanceToInput();
+
+  const intakeSummary = typedComplaint || capturedVoiceData?.translation ||
+    (extractedFacts.length
+      ? `Uploaded report with ${extractedFacts.length} extracted values for clinician verification.`
+      : photoFile
+        ? 'A visual attachment is ready for clinician review.'
+        : 'Clinical information recorded for clinician review.');
+
+  const selectChannel = (channel: 'VOICE' | 'TYPE' | 'REPORT' | 'PHOTO') => {
+    if (channel !== selectedChannel) {
+      setCapturedVoiceData(null);
+      setExtractedFacts([]);
+      setReportFile(null);
+      setPhotoFile(null);
+      if (channel !== 'TYPE') setTypedComplaint('');
+    }
+    setSubmissionError(null);
+    setSelectedChannel(channel);
   };
 
   const handleFinalSubmit = async () => {
+    if (!name.trim() || !Number.isFinite(Number(age)) || Number(age) <= 0) {
+      setSubmissionError('Enter the patient name and a valid age before sending this intake.');
+      return;
+    }
+    if (!consentGranted) {
+      setSubmissionError('Record patient or guardian consent before sending this intake.');
+      return;
+    }
+    if (selectedChannel === 'PHOTO' && !photoFile) {
+      setSubmissionError('Attach a PNG or JPEG image before continuing with visual intake.');
+      return;
+    }
     setIsSubmitting(true);
+    setSubmissionError(null);
     const newId = `P-${Math.floor(1000 + Math.random() * 9000)}`;
     const syntheticCode = `SYN-2026-${Math.floor(100 + Math.random() * 900)}`;
-    let backendCaseId: string | undefined = undefined;
+    let backendCaseId: string | undefined;
     let backendVersion = 1;
 
-    try {
-      // 1. Synthetic patient UUID
-      const syntheticSubjectId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '3fa85f64-5717-4562-b3fc-2c963f66afa6';
-
-      // 2. Request & Capture Consent for both ai_analysis and data_processing
-      const consent = await consentApi.requestAndCapture(syntheticSubjectId, 'ai_analysis', '1.0');
+    if (!isOffline) {
       try {
-        await consentApi.requestAndCapture(syntheticSubjectId, 'data_processing', '1.0');
-        await consentApi.requestAndCapture(syntheticSubjectId, 'referral', '1.0');
-      } catch (cErr) {
-        // Optional secondary purposes
+        const pending = pendingBackendRef.current || {
+          subjectId: typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `00000000-0000-4000-8000-${Math.floor(Math.random() * 0xffffffffffff).toString(16).padStart(12, '0')}`,
+        };
+        pendingBackendRef.current = pending;
+
+        if (!pending.consentId) {
+          const consent = await consentApi.requestAndCapture(pending.subjectId, 'data_processing', '1.0');
+          pending.consentId = consent.id;
+        }
+        if (!pending.caseId) {
+          const created = await caseApi.createCase({
+            synthetic_subject_id: pending.subjectId,
+            consent_id: pending.consentId,
+          });
+          pending.caseId = created.case_id;
+          pending.version = created.version;
+        }
+
+        const reportText = extractedFacts.map((fact) =>
+          `${fact.name}: ${fact.value}${fact.unit ? ` ${fact.unit}` : ''} (page ${fact.sourcePage}; ${fact.confidence.toLowerCase()} confidence)`
+        ).join('\n');
+        const evidenceText = [
+          `Intake channel: ${selectedChannel}`,
+          capturedVoiceData ? `Original transcript: ${capturedVoiceData.transcript}` : '',
+          `Patient-reported information: ${intakeSummary}`,
+          reportText ? `OCR values for clinician verification:\n${reportText}` : '',
+        ].filter(Boolean).join('\n\n').slice(0, 20000);
+
+        if (!pending.textEvidenceId) {
+          const textEvidence = await evidenceApi.registerTextEvidence({
+            case_id: pending.caseId,
+            text_content: evidenceText,
+            consent_id: pending.consentId,
+            source_language: capturedVoiceData
+              ? (primaryLanguage.startsWith('Odia') ? 'or' : primaryLanguage.startsWith('Hindi') ? 'hi' : 'en')
+              : 'en',
+          });
+          pending.textEvidenceId = textEvidence.evidence_id;
+        }
+
+        const attachment = selectedChannel === 'REPORT' ? reportFile : selectedChannel === 'PHOTO' ? photoFile : null;
+        if (attachment && !pending.attachmentEvidenceId) {
+          const uploaded = await evidenceApi.uploadFileEvidence({
+            caseId: pending.caseId,
+            consentId: pending.consentId,
+            modality: selectedChannel === 'PHOTO' ? 'image' : 'document',
+            file: attachment,
+          });
+          pending.attachmentEvidenceId = uploaded.evidence_id;
+        }
+
+        if (!pending.processingStarted && pending.textEvidenceId) {
+            const extraction = await processingApi.executeProcessing({
+              evidence_id: pending.textEvidenceId,
+              processor_type: 'candidate_extraction',
+            });
+            if (extraction.status !== 'COMPLETED') {
+              throw new Error(extraction.failure_reason || extraction.error_detail || 'Evidence extraction did not complete. Retry before entering review.');
+            }
+            pending.processingStarted = true;
+        }
+        if (!pending.queueEntered) {
+          await reviewApi.enterQueue(pending.caseId);
+          pending.queueEntered = true;
+        }
+        backendCaseId = pending.caseId;
+        const savedCase = await caseApi.getCase(pending.caseId);
+        pending.version = savedCase.version;
+        backendVersion = savedCase.version;
+      } catch (error: unknown) {
+        setSubmissionError(error instanceof Error ? error.message : 'The intake could not be sent. Your entries are still on this screen; retry when the service is available.');
+        setIsSubmitting(false);
+        return;
       }
-
-      // 3. Create Case
-      const caseRes = await caseApi.createCase({
-        synthetic_subject_id: syntheticSubjectId,
-        consent_id: consent.id,
-      });
-
-      backendCaseId = caseRes.case_id;
-      backendVersion = caseRes.version;
-
-      // 4. Ingest Evidence
-      const complaintText = typedComplaint || capturedVoiceData?.translation || 'General symptoms recorded at intake';
-      const evidenceRes = await evidenceApi.registerTextEvidence({
-        case_id: caseRes.case_id,
-        text_content: complaintText,
-        consent_id: consent.id,
-        source_language: capturedVoiceData?.language ? 'or' : 'en',
-      });
-
-      // 5. Trigger Processing
-      await processingApi.triggerProcessing({
-        evidence_id: evidenceRes.evidence_id,
-        processor_type: 'candidate_extraction',
-      });
-
-      // 6. Enter Review Queue in backend
-      try {
-        await reviewApi.enterQueue(caseRes.case_id);
-      } catch (qErr) {
-        console.warn('Backend review queue entry note:', qErr);
-      }
-    } catch (e) {
-      console.warn('Backend API intake pipeline bypassed with local fallback:', e);
-    } finally {
-      setIsSubmitting(false);
     }
 
-    let symptomsList: Symptom[] = [];
-    if (capturedVoiceData && capturedVoiceData.symptoms.length > 0) {
-      symptomsList = capturedVoiceData.symptoms;
-    } else {
-      symptomsList = [
-        {
-          id: `sym-new-1`,
-          name: typedComplaint.substring(0, 40),
-          duration: '4 days',
-          severity: 'MODERATE',
-          source: selectedChannel === 'VOICE' ? 'VOICE' : 'MANUAL',
-          confidence: 0.95,
-        },
-      ];
-    }
+    const symptomsList = capturedVoiceData?.symptoms || [];
 
     const newPatient: Patient = {
       id: newId,
@@ -170,48 +270,30 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
       gender,
       primaryLanguage: capturedVoiceData?.language || primaryLanguage || 'Odia (ଓଡ଼ିଆ)',
       translatedToEnglish: true,
-      contactMasked: contact.replace(/(\d{4})\d{4}(\d{2})/, '$1****$2'),
+      contactMasked: contact ? `${contact.slice(0, 4)}****${contact.slice(-2)}` : 'Not provided',
       visitId: `VST-2026-${Math.floor(1000 + Math.random() * 9000)}`,
       arrivalTime: 'Today · Just now',
-      chiefComplaint: typedComplaint || capturedVoiceData?.translation || 'General symptoms at triage',
+      chiefComplaint: intakeSummary,
       symptoms: symptomsList,
       relevantHistory: ['Recorded during CHC intake session', 'Consent obtained and verified'],
-      vitals: {
-        bloodPressure: '122/80 mmHg',
-        pulseRate: '82 bpm',
-        temperature: '98.8 °F',
-        spO2: '97%',
-        respiratoryRate: '18 breaths/min',
-      },
+      vitals: {},
       facts: extractedFacts,
-      missingInfo: [
-        {
-          id: `miss-new-1`,
-          field: 'duration_onset',
-          label: 'Exact onset of acute flare',
-          category: 'SYMPTOM_DETAIL',
-          status: 'NOT_PROVIDED',
-          reason: 'Clarify if morning stiffness lasts > 30 minutes.',
-          askPrompt: 'Does the joint stiffness last longer than 30 minutes after waking up?',
-          quickOptions: ['Yes, > 30 mins', 'No, improves quickly', 'Constant stiffness'],
-        },
-      ],
+      missingInfo: [],
       riskFlags: [],
-      aiQuestions: [
-        {
-          id: `q-new-1`,
-          missingInfoId: `miss-new-1`,
-          questionText: 'Does the joint stiffness last longer than 30 minutes after waking up in the morning?',
-          options: ['Yes, > 30 mins', 'No, improves quickly', 'Constant stiffness', 'Not sure'],
-        },
-      ],
+      aiQuestions: [],
       timeline: [
         {
           id: `tl-new-1`,
           timestamp: 'Just now',
           title: 'Patient Intake Completed',
           description: `Intake recorded via ${selectedChannel} channel.`,
-          source: selectedChannel === 'VOICE' ? 'VOICE' : 'REPORT',
+          source: selectedChannel === 'VOICE'
+            ? 'VOICE'
+            : selectedChannel === 'REPORT'
+              ? 'REPORT'
+              : selectedChannel === 'PHOTO'
+                ? 'PHOTO'
+                : 'MANUAL',
           actor: 'CHO Ramesh Sahoo',
         },
       ],
@@ -227,8 +309,9 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         },
       ],
       status: 'PENDING_REVIEW',
-      priority: 'YELLOW',
+      priority: 'GREY',
       facilityId: currentFacility?.id || 'fac-1',
+      intakeSource: selectedChannel,
     };
 
     addPatient(newPatient);
@@ -238,7 +321,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         patientId: newId,
         patientName: name,
         type: selectedChannel === 'VOICE' ? 'voice' : selectedChannel === 'REPORT' ? 'ocr' : 'text',
-        summary: typedComplaint || capturedVoiceData?.translation || 'New clinical intake registered',
+        summary: intakeSummary,
       });
     }
 
@@ -249,11 +332,13 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
       patientGender: gender,
       department: 'CHC Outpatient Desk',
       priority: newPatient.priority,
-      chiefComplaint: typedComplaint || capturedVoiceData?.translation || 'New patient intake registered',
+      chiefComplaint: intakeSummary,
       vitalsSnippet: `BP: ${newPatient.vitals.bloodPressure} · SpO2: ${newPatient.vitals.spO2} · Temp: ${newPatient.vitals.temperature}`,
       facilityName: currentFacility?.name || 'Nuapada District Hospital',
     });
 
+    pendingBackendRef.current = null;
+    setIsSubmitting(false);
     onIntakeCompleted(newId);
   };
 
@@ -344,6 +429,12 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         </div>
       </div>
 
+      {submissionError && (
+        <div role="alert" className="p-3 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-900">
+          {submissionError}
+        </div>
+      )}
+
       {/* Step 1: Patient Info & Consent (Section 6) */}
       {currentStep === 1 && (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
@@ -395,7 +486,11 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                 <label className="block font-semibold text-[#25364A] mb-1">Gender / ଲିଙ୍ଗ:</label>
                 <select
                   value={gender}
-                  onChange={(e) => setGender(e.target.value as any)}
+                  onChange={(e) => {
+                    if (e.target.value === 'Female' || e.target.value === 'Male' || e.target.value === 'Other') {
+                      setGender(e.target.value);
+                    }
+                  }}
                   className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none bg-white"
                 >
                   <option value="Female">Female</option>
@@ -460,15 +555,15 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                     </span>
                   </div>
                   <p className="text-[#526276] leading-relaxed mt-1">
-                    I confirm that the patient (or guardian) has received verbal disclosure in their primary language and consented to multimodal intake, voice recording, and AI diagnostic note organization.
+                    I confirm that the patient or guardian received a disclosure in their primary language and consented to information capture and AI-assisted organization for qualified human review.
                   </p>
                 </label>
               </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-[#E6ECF2]">
-              <Button variant="primary" size="lg" onClick={handleNextFromStep1} icon={<ArrowRight className="w-4 h-4" />}>
-                Next: Select Input Mode
+              <Button variant="primary" size="lg" onClick={handleNextFromStep1} disabled={isAdvancingStep} icon={isAdvancingStep ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}>
+                {isAdvancingStep ? 'Recording Consent…' : 'Next: Select Input Mode'}
               </Button>
             </div>
           </div>
@@ -529,7 +624,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
               {/* Card 1: Speak */}
               <button
                 type="button"
-                onClick={() => setSelectedChannel('VOICE')}
+                onClick={() => selectChannel('VOICE')}
                 className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                   selectedChannel === 'VOICE'
                     ? 'border-[#2563EB] bg-[#E8F0FF] ring-2 ring-blue-100 shadow-xs'
@@ -546,7 +641,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
               {/* Card 2: Type */}
               <button
                 type="button"
-                onClick={() => setSelectedChannel('TYPE')}
+                onClick={() => selectChannel('TYPE')}
                 className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                   selectedChannel === 'TYPE'
                     ? 'border-[#2563EB] bg-[#E8F0FF] ring-2 ring-blue-100 shadow-xs'
@@ -563,7 +658,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
               {/* Card 3: Upload Report */}
               <button
                 type="button"
-                onClick={() => setSelectedChannel('REPORT')}
+                onClick={() => selectChannel('REPORT')}
                 className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                   selectedChannel === 'REPORT'
                     ? 'border-[#2563EB] bg-[#E8F0FF] ring-2 ring-blue-100 shadow-xs'
@@ -580,7 +675,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
               {/* Card 4: Take Photo */}
               <button
                 type="button"
-                onClick={() => setSelectedChannel('PHOTO')}
+                onClick={() => selectChannel('PHOTO')}
                 className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                   selectedChannel === 'PHOTO'
                     ? 'border-[#2563EB] bg-[#E8F0FF] ring-2 ring-blue-100 shadow-xs'
@@ -602,16 +697,19 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
               onComplete={(data) => {
                 setCapturedVoiceData(data);
                 setTypedComplaint(data.translation);
+                setSubmissionError(null);
                 setCurrentStep(3);
               }}
-              onSwitchToType={() => setSelectedChannel('TYPE')}
+                  onSwitchToType={() => selectChannel('TYPE')}
             />
           )}
 
           {selectedChannel === 'REPORT' && (
-            <ReportExtractStudio
-              onFactsExtracted={(f) => {
+              <ReportExtractStudio
+              ocrConsent={ocrConsentContext || undefined}
+              onFactsExtracted={(f, file) => {
                 setExtractedFacts(f);
+                setReportFile(file || null);
                 setCurrentStep(3);
               }}
             />
@@ -650,18 +748,41 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
               </div>
               <h4 className="text-sm font-bold text-[#102033]">Basic Visual Input Capture</h4>
               <p className="text-xs text-[#526276] max-w-sm mx-auto">
-                Attach a clear photo of skin rash, eye conjunctiva, or clinical paper token for non-diagnostic orientation.
+                Attach a PNG or JPEG for qualified staff to inspect. The prototype stores the image as evidence and does not diagnose from photographs.
               </p>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => {
-                  setTypedComplaint('Visual photo of right forearm erythematous rash attached.');
-                  setCurrentStep(3);
-                }}
-              >
-                Use Sample Clinical Photo & Continue
-              </Button>
+              <label className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-[#2563EB] text-white text-sm font-semibold cursor-pointer hover:bg-blue-700">
+                <Camera className="w-4 h-4 mr-2" />
+                Choose an image
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    if (file && !['image/png', 'image/jpeg'].includes(file.type)) {
+                      setPhotoFile(null);
+                      setSubmissionError('Choose a PNG or JPEG image.');
+                    } else if (file && file.size > 20 * 1024 * 1024) {
+                      setPhotoFile(null);
+                      setSubmissionError('This image is larger than the 20 MB upload limit.');
+                    } else {
+                      setPhotoFile(file);
+                      setSubmissionError(null);
+                    }
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+              {photoFile && (
+                <div className="text-xs text-[#526276]">
+                  Attached: <strong>{photoFile.name}</strong> ({(photoFile.size / 1024 / 1024).toFixed(1)} MB)
+                </div>
+              )}
+              <div>
+                <Button variant="secondary" size="md" disabled={!photoFile} onClick={() => setCurrentStep(3)}>
+                  Continue to review
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -684,13 +805,13 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
             </div>
             <div className="text-center sm:text-left space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full inline-block">
-                Information Successfully Recorded
+                Intake Ready for Submission
               </span>
               <h3 className="text-lg font-bold text-[#102033]">
                 Ready for Clinical Triage Review
               </h3>
               <p className="text-xs text-[#526276] leading-relaxed max-w-lg">
-                Your information has been recorded. A healthcare professional will review it in the operational triage queue.
+                Review the captured details, then send this intake to the operational triage queue.
               </p>
             </div>
           </div>
@@ -716,8 +837,17 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
           <div className="p-4 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] text-xs">
             <span className="font-semibold text-[#6B7B8F] block mb-1">Chief Complaint & Symptoms</span>
             <p className="text-sm font-semibold text-[#102033] leading-relaxed">
-              &ldquo;{typedComplaint || capturedVoiceData?.translation}&rdquo;
+                &ldquo;{intakeSummary}&rdquo;
             </p>
+            {reportFile && (
+              <p className="text-xs text-[#526276] mt-2">Report attached: {reportFile.name}</p>
+            )}
+            {photoFile && (
+              <p className="text-xs text-[#526276] mt-2">Image attached for human review: {photoFile.name}</p>
+            )}
+            {extractedFacts.length > 0 && (
+              <p className="text-xs text-[#526276] mt-2">{extractedFacts.length} extracted values are provisional and require clinician verification.</p>
+            )}
           </div>
 
           {/* Prototype Non-diagnostic declaration */}
@@ -751,7 +881,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         onConsent={() => {
           setConsentGranted(true);
           setShowConsentModal(false);
-          setCurrentStep(2);
+          void advanceToInput(true);
         }}
         onCancel={() => setShowConsentModal(false)}
       />

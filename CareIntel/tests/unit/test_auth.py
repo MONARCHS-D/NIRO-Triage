@@ -56,6 +56,7 @@ async def test_consent_request_assigns_identity_before_initial_event() -> None:
     consent_repo = AsyncMock()
     audit_repo = AsyncMock()
     captured: dict[str, object] = {}
+    consent_repo.get_by_subject_purpose_version.return_value = None
 
     async def create(consent: object, event: object) -> object:
         captured["consent"] = consent

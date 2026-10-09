@@ -19,6 +19,7 @@ from careintel.domain.audit.events import AuditEventType
 from careintel.domain.auth.models import UserContext
 from careintel.domain.auth.permissions import Permission
 from careintel.domain.auth.policy import AuthorizationPolicy
+from careintel.application.auth.permission_service import PermissionService
 from careintel.domain.case.commands import CreateCaseCommand, TransitionCaseCommand
 from careintel.domain.case.models import CaseAggregate
 from careintel.domain.case.state_machine import CaseStateMachine
@@ -59,6 +60,32 @@ class CaseService:
             created_at=orm.created_at,
             updated_at=orm.updated_at,
         )
+
+    async def list_cases(
+        self, actor: UserContext, *, limit: int = 50, offset: int = 0
+    ) -> list[CaseAggregate]:
+        """List recent cases visible to the actor without exposing other facilities."""
+        PermissionService.check(actor, Permission.CASE_READ)
+        global_access = any(
+            actor.role_facilities.get(role) is None
+            for role in actor.roles
+            if role in actor.role_facilities
+        )
+        facility_ids = (
+            None
+            if global_access
+            else {
+                facility_id
+                for role, facility_id in actor.role_facilities.items()
+                if role in actor.roles and facility_id is not None
+            }
+        )
+        records = await self.case_repo.list_recent(
+            facility_ids=facility_ids,
+            limit=max(1, min(limit, 100)),
+            offset=max(0, offset),
+        )
+        return [self._to_domain(record) for record in records]
 
     async def create_case(
         self,
@@ -223,6 +250,7 @@ class CaseService:
         # Transition
         new_version = cmd.expected_version + 1
         to_state_str = str(cmd.to_state)
+        from_state_str = str(case_orm.state)
         now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
 
         updated = await self.case_repo.update_state(cmd.case_id, to_state_str, new_version)
@@ -233,7 +261,7 @@ class CaseService:
         history_orm = CaseStateHistoryORM(
             id=uuid.uuid4(),
             case_id=cmd.case_id,
-            from_state=case_orm.state,
+            from_state=from_state_str,
             to_state=to_state_str,
             actor_id=actor.id,
             aggregate_version=new_version,
@@ -255,7 +283,7 @@ class CaseService:
             actor_id=actor.id,
             aggregate_version=new_version,
             payload={
-                "from_state": case_orm.state,
+                "from_state": from_state_str,
                 "to_state": to_state_str,
                 "reason": cmd.reason,
             },
@@ -271,7 +299,7 @@ class CaseService:
                 target_type="case",
                 correlation_id=cmd.correlation_id,
                 outcome="SUCCESS",
-                detail={"from_state": case_orm.state, "to_state": to_state_str},
+                detail={"from_state": from_state_str, "to_state": to_state_str},
             )
         )
 

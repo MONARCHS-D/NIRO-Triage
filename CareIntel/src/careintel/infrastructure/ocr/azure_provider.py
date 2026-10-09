@@ -176,7 +176,7 @@ class AzureDocumentIntelligenceProvider(OcrProvider):
 
             reader = PdfReader(BytesIO(file_bytes))
             total_pages = len(reader.pages)
-            pages_to_process = min(total_pages, 6)
+            pages_to_process = total_pages
 
             all_pages: list[OcrPage] = []
             all_regions: list[OcrRegion] = []

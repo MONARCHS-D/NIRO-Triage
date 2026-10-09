@@ -14,6 +14,14 @@ import {
 } from './types';
 
 export const caseApi = {
+  /** List recent cases visible to the signed-in reviewer. */
+  async listCases(filters?: { limit?: number; offset?: number }): Promise<CaseResponse[]> {
+    return apiFetch<CaseResponse[]>('/cases', {
+      method: 'GET',
+      params: filters,
+    });
+  },
+
   /**
    * Create a new case. Requires an active consent ID.
    */

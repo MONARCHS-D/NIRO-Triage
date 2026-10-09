@@ -59,7 +59,7 @@ from careintel.infrastructure.ai.demo_adapter import DemoLLMProvider
 from careintel.infrastructure.embedding.demo_provider import DemoEmbeddingProvider
 from careintel.infrastructure.extraction.demo_provider import DemoExtractionProvider
 from careintel.infrastructure.language.demo_provider import DemoLanguageProvider
-from careintel.infrastructure.ocr.demo_provider import DemoOcrProvider
+from careintel.infrastructure.ocr.port import OcrResult
 from careintel.infrastructure.reranker.noop_reranker import NoOpReranker
 from careintel.infrastructure.storage.fake_provider import FakeBlobProvider
 from careintel.infrastructure.stt.demo_provider import DemoSpeechProvider
@@ -315,9 +315,13 @@ async def test_full_synthetic_application_workflow(
         processing_repo = ProcessingRepository(session)
         outbox_repo = EvidenceOutboxRepository(session)
         guard = ProcessingAccessGuard(evidence_repo, CaseRepository(session), consent_service)
+        synthetic_ocr = AsyncMock()
+        synthetic_ocr.process_document.return_value = OcrResult(
+            pages=[], regions=[], provider_version="synthetic-test"
+        )
         processing_service = ProcessingService(
             document_processor=DocumentProcessor(
-                settings, guard, processing_repo, outbox_repo, blob, DemoOcrProvider()
+                settings, guard, processing_repo, outbox_repo, blob, synthetic_ocr
             ),
             speech_processor=SpeechProcessor(
                 settings, guard, processing_repo, outbox_repo, blob, DemoSpeechProvider()

@@ -99,6 +99,7 @@ interface RoleContextType {
   viewMode: 'REVIEWER_DESKTOP' | 'PATIENT_MOBILE';
   isOffline: boolean;
   isAuthenticated: boolean;
+  isAuthLoading: boolean;
   isSessionExpired: boolean;
   isSidebarCollapsed: boolean;
   capabilities: RoleCapabilities;
@@ -124,7 +125,6 @@ interface RoleContextType {
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 const AUTH_STORAGE_KEY = 'careintel_auth_state_v1';
-const LEGACY_AUTH_STORAGE_KEY = 'niro_auth_state_v1';
 const SIDEBAR_STORAGE_KEY = 'careintel_sidebar_collapsed';
 const LEGACY_SIDEBAR_STORAGE_KEY = 'niro_sidebar_collapsed';
 const STAFF_DIRECTORY_KEY = 'careintel_staff_directory_v1';
@@ -151,10 +151,6 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY) ?? localStorage.getItem(LEGACY_AUTH_STORAGE_KEY);
-      if (storedAuth !== null) {
-        setIsAuthenticated(storedAuth !== 'false');
-      }
     } catch {
       // ignore
     }
@@ -172,7 +168,8 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
   const [lastStaffRole, setLastStaffRole] = useState<UserRole>('DOCTOR');
   const [isOffline, setIsOffline] = useState<boolean>(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
@@ -362,9 +359,9 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     hasInitializedAuthRef.current = true;
 
     const initAuth = async () => {
-      const token = getAuthToken();
-      if (token) {
-        try {
+      try {
+        const token = getAuthToken();
+        if (token) {
           const profile = await authApi.getMe();
           if (profile && profile.id) {
             setIsAuthenticated(true);
@@ -379,21 +376,18 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
               id: profile.id,
             }));
           }
-        } catch (e: any) {
-          console.warn('Backend session verification failed, falling back to local storage:', e);
-          if (e?.code === 'NETWORK_ERROR') {
-            setIsOffline(true);
-          }
-          const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-          if (stored === 'true') {
-            setIsAuthenticated(true);
-          }
         }
-      } else {
-        const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-        if (stored === 'true') {
-          setIsAuthenticated(true);
+      } catch (e: any) {
+        if (e?.code === 'NETWORK_ERROR') {
+          setIsOffline(true);
+          setIsAuthenticated(localStorage.getItem(AUTH_STORAGE_KEY) === 'true');
+        } else {
+          setAuthToken(null);
+          localStorage.setItem(AUTH_STORAGE_KEY, 'false');
+          setIsAuthenticated(false);
         }
+      } finally {
+        setIsAuthLoading(false);
       }
     };
 
@@ -417,28 +411,24 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
+    let backendUserId: string | undefined;
     try {
       // Attempt backend login first
       const email = staffIdOrEmail.includes('@') ? staffIdOrEmail : `${staffIdOrEmail}@careintel.local`;
       await authApi.login({ email, password });
       setIsOffline(false);
 
-      // Retrieve backend profile and capture actual user UUID
-      try {
-        const profile = await authApi.getMe();
-        if (profile && profile.id) {
-          setCurrentUser((prev) => ({
-            ...prev,
-            id: profile.id,
-          }));
-        }
-      } catch {
-        // Non-fatal
-      }
+      const profile = await authApi.getMe();
+      backendUserId = profile.id;
     } catch (e: any) {
-      console.warn('Backend login endpoint unavailable or rejected, using prototype mode:', e);
       if (e?.code === 'NETWORK_ERROR') {
+        // Keep the explicitly supported offline workflow available only when
+        // cached data exists; rejected credentials never become a local login.
         setIsOffline(true);
+      } else {
+        setAuthToken(null);
+        setIsAuthenticated(false);
+        return false;
       }
     }
 
@@ -472,6 +462,10 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       setUserRole('DOCTOR');
     }
 
+    if (backendUserId) {
+      setCurrentUser((prev) => ({ ...prev, id: backendUserId! }));
+    }
+
     setIsAuthenticated(true);
     setIsSessionExpired(false);
     if (typeof window !== 'undefined') {
@@ -503,6 +497,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         viewMode,
         isOffline,
         isAuthenticated,
+        isAuthLoading,
         isSessionExpired,
         isSidebarCollapsed,
         capabilities,

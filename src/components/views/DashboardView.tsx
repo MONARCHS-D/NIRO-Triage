@@ -14,6 +14,7 @@ import {
   PlusCircle,
   Eye,
   ShieldAlert,
+  RefreshCw,
 } from 'lucide-react';
 import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
 import { QuickInspectDrawer } from '../common/QuickInspectDrawer';
@@ -35,6 +36,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     setPriorityFilter,
     refreshCases,
     outbox,
+    isSyncing,
+    syncError,
   } = useTriage();
   const { currentUser, currentFacility, capabilities } = useRole();
 
@@ -42,20 +45,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isInspectOpen, setIsInspectOpen] = useState(false);
 
   React.useEffect(() => {
-    refreshCases();
+    void refreshCases();
   }, [refreshCases]);
 
-  // Compute dynamic stats from live patient data
-  const totalRegisteredToday = Math.max(patients.length, 32);
+  // Compute dashboard stats only from fetched cases and real local outbox items.
+  const totalRegisteredToday = patients.length;
   const activeQueueCount = patients.filter((p) => p.status !== 'APPROVED' && p.status !== 'REVIEWED').length;
   const urgentCount = patients.filter((p) => p.priority === 'RED' && p.status !== 'APPROVED').length;
   const pendingSyncCount = outbox ? outbox.filter((i) => i.status !== 'synced').length : 0;
-
-  const getPatientWaitMinutes = (p: Patient): number => {
-    if (p.priority === 'RED') return 12;
-    if (p.priority === 'YELLOW') return 28;
-    return 52;
-  };
 
   // Filter patients by priority tab
   const filteredPatients = patients.filter((p) => {
@@ -87,8 +84,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <RestrictedAction isRestricted={capabilities.isSuspended} reason="intake">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isSyncing}
+              onClick={() => void refreshCases()}
+              icon={<RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
+            >
+              {isSyncing ? 'Refreshing' : 'Refresh data'}
+            </Button>
+            <RestrictedAction isRestricted={capabilities.isSuspended} reason="intake">
             <Button
               variant="primary"
               size="md"
@@ -102,6 +108,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </RestrictedAction>
         </div>
       </div>
+
+      {syncError && (
+        <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950 flex items-center justify-between gap-3">
+          <span>Live case data could not be loaded: {syncError}</span>
+          <Button variant="secondary" size="sm" onClick={() => void refreshCases()}>Retry</Button>
+        </div>
+      )}
 
       {/* Compact Suspension Status Panel */}
       {capabilities.isSuspended && (
@@ -132,34 +145,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 4 KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          label="Patients today"
+          label="Cases loaded"
           value={totalRegisteredToday.toString()}
-          delta="+12%"
-          deltaType="increase"
-          helperText="New facility registrations"
+          helperText="Recent cases returned by the backend"
         />
         <KpiCard
-          label="Active queue"
+          label="Active cases"
           value={activeQueueCount.toString()}
-          delta={urgentCount > 0 ? `${urgentCount} urgent` : 'All routine'}
-          deltaType={urgentCount > 0 ? 'increase' : 'neutral'}
           alert={urgentCount > 0}
-          helperText="Awaiting clinical review"
+          helperText="Cases not yet completed"
           active={priorityFilter === 'ALL'}
           onClick={() => setPriorityFilter('ALL')}
         />
         <KpiCard
-          label="Avg. review time"
-          value="18 min"
-          delta="-26%"
-          deltaType="decrease"
-          helperText="Last 24 hours benchmark"
+          label="Escalated"
+          value={patients.filter((p) => p.status === 'ESCALATED').length}
+          helperText="Cases escalated for clinician attention"
         />
         <KpiCard
           label="Pending sync"
           value={pendingSyncCount.toString()}
-          delta={pendingSyncCount > 0 ? `${pendingSyncCount} waiting` : 'Synced'}
-          deltaType={pendingSyncCount > 0 ? 'neutral' : 'decrease'}
+          delta={pendingSyncCount > 0 ? `${pendingSyncCount} waiting` : undefined}
+          deltaType="neutral"
           helperText="Local offline records"
         />
       </div>
@@ -230,15 +237,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <th className="py-3 px-4">Age/Sex</th>
                 <th className="py-3 px-4">Chief complaint</th>
                 <th className="py-3 px-4">Triage status</th>
-                <th className="py-3 px-4">Wait time</th>
+                <th className="py-3 px-4">Received</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E6ECF2]">
-              {filteredPatients.slice(0, 10).map((patient) => {
-                const waitMins = getPatientWaitMinutes(patient);
-
-                return (
+              {filteredPatients.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-[#6B7B8F]">
+                    {isSyncing ? 'Loading cases from the backend…' : syncError ? 'Case data is unavailable until the backend connection is restored.' : 'No cases are currently available for this facility.'}
+                  </td>
+                </tr>
+              ) : filteredPatients.slice(0, 10).map((patient) => (
                   <tr
                     key={patient.id}
                     onClick={() => handleInspectRow(patient)}
@@ -253,7 +263,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {patient.name}
                     </td>
                     <td className="py-3.5 px-4 text-[#25364A] whitespace-nowrap tabular-nums">
-                      {patient.age} / {patient.gender[0]}
+                      {patient.age > 0 ? patient.age : '—'} / {patient.age > 0 ? patient.gender[0] : '—'}
                     </td>
                     <td className="py-3.5 px-4 text-[#25364A] max-w-md truncate">
                       {patient.chiefComplaint}
@@ -262,7 +272,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <PriorityBadge priority={patient.priority} size="sm" />
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap tabular-nums font-semibold text-slate-700">
-                      {waitMins}m
+                      {patient.arrivalTime}
                     </td>
                     <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -283,8 +293,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </div>
                     </td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>

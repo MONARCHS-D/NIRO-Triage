@@ -32,6 +32,7 @@ from careintel.domain.evidence.commands import (
     RegisterTextEvidenceCommand,
     UploadFileEvidenceCommand,
 )
+from careintel.domain.evidence.modality import EvidenceModality
 from careintel.domain.evidence.models import EvidenceAggregate
 from careintel.domain.evidence.state_machine import EvidenceStateMachine
 from careintel.domain.evidence.states import EvidenceState
@@ -94,7 +95,9 @@ class EvidenceService:
             evidence_id=orm.id,
             case_id=orm.case_id,
             encounter_id=orm.encounter_id,
-            modality=orm.modality,  # type: ignore
+            # Older rows were persisted as uppercase enum names while the
+            # public API and domain enum use lowercase wire values.
+            modality=EvidenceModality(str(orm.modality).lower()),
             state=EvidenceState(orm.state),
             original_filename=orm.original_filename,
             content_type=orm.content_type,

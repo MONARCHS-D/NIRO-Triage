@@ -46,16 +46,27 @@ export default function LoginPage() {
         setErrorMsg("We couldn't sign you in. Check your staff ID and password and try again.");
         setIsLoading(false);
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "We couldn't sign you in. Check your staff ID and password and try again.");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "We couldn't sign you in. Check your staff ID and password and try again.");
       setIsLoading(false);
     }
   };
 
   const handleQuickDemoLogin = async (roleIdentifier: string) => {
     setIsLoading(true);
-    await login(roleIdentifier, 'demo123');
-    router.push('/dashboard');
+    setErrorMsg('');
+    try {
+      const success = await login(roleIdentifier, 'demo123');
+      if (success) {
+        router.push('/dashboard');
+      } else {
+        setErrorMsg('The demo account could not sign in. Check the backend connection and try again.');
+        setIsLoading(false);
+      }
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'The demo account could not sign in.');
+      setIsLoading(false);
+    }
   };
 
   return (

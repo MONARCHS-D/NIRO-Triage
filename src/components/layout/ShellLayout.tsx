@@ -21,6 +21,7 @@ export const ShellLayout: React.FC<ShellLayoutProps> = ({ children }) => {
     viewMode,
     exitPatientMobile,
     isAuthenticated,
+    isAuthLoading,
     isSessionExpired,
     setIsSessionExpired,
     capabilities,
@@ -29,10 +30,18 @@ export const ShellLayout: React.FC<ShellLayoutProps> = ({ children }) => {
 
   // Route guard per Section 40
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthLoading && !isAuthenticated) {
       router.push('/auth/login');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthLoading, isAuthenticated, router]);
+
+  if (isAuthLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]" role="status" aria-live="polite">
+        <span className="text-sm text-slate-600">{isAuthLoading ? 'Checking your session…' : 'Redirecting to sign in…'}</span>
+      </div>
+    );
+  }
 
   // If in Patient Mobile Experience mode, render mobile viewport
   if (viewMode === 'PATIENT_MOBILE') {

@@ -1,0 +1,21 @@
+{
+  "startedAt": "2026-10-09T18:59:42.449Z",
+  "frontendStatus": "OK",
+  "backendStatus": "OK",
+  "consoleErrors": [],
+  "consoleWarnings": [],
+  "failedRequests": [],
+  "passedSteps": [
+    "Initial Page Load (Dashboard)",
+    "Authentication Flow (/auth/login)",
+    "Triage Review Queue (/queue)",
+    "Patient Directory (/patients)",
+    "Patient Clinical Workstation (/patients/P-1042)",
+    "Manual Intake Flow (/intake)",
+    "Report OCR Intake (/intake/report)",
+    "Voice Intake Interface (/intake/voice)",
+    "Settings & Role Switcher (/settings)"
+  ],
+  "failedSteps": [],
+  "completedAt": "2026-10-09T19:00:24.898Z"
+}

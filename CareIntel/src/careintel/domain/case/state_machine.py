@@ -20,7 +20,9 @@ class CaseStateMachine:
         CaseState.CONSENTED: frozenset({CaseState.INPUT_RECEIVED}),
         CaseState.INPUT_RECEIVED: frozenset({CaseState.PROCESSING}),
         CaseState.PROCESSING: frozenset({CaseState.EXTRACTING}),
-        CaseState.EXTRACTING: frozenset({CaseState.NORMALIZING}),
+        # Literal candidates can proceed directly to human review. The later
+        # advisory analysis stages remain optional and never gate a clinician.
+        CaseState.EXTRACTING: frozenset({CaseState.NORMALIZING, CaseState.REVIEW_PENDING}),
         CaseState.NORMALIZING: frozenset({CaseState.RETRIEVING}),
         CaseState.RETRIEVING: frozenset({CaseState.AI_ANALYSIS}),
         CaseState.AI_ANALYSIS: frozenset({CaseState.SAFETY_CHECK}),

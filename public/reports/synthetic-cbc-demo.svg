@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1100" viewBox="0 0 800 1100">
+  <rect width="800" height="1100" fill="#ffffff"/>
+  <rect x="40" y="40" width="720" height="1020" rx="20" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+  <text x="80" y="120" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#102033">CAREINTEL · SYNTHETIC SAMPLE</text>
+  <text x="80" y="165" font-family="Arial, sans-serif" font-size="18" fill="#526276">Educational demo document. No real patient data.</text>
+  <text x="80" y="250" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#102033">Complete Blood Count</text>
+  <line x1="80" y1="280" x2="720" y2="280" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="90" y="340" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#526276">TEST</text>
+  <text x="420" y="340" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#526276">RESULT</text>
+  <text x="560" y="340" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#526276">UNIT</text>
+  <g font-family="Arial, sans-serif" font-size="20" fill="#102033">
+    <text x="90" y="410">Hemoglobin</text><text x="420" y="410">12.8</text><text x="560" y="410">g/dL</text>
+    <text x="90" y="490">White blood cell count</text><text x="420" y="490">8,200</text><text x="560" y="490">/µL</text>
+    <text x="90" y="570">Platelet count</text><text x="420" y="570">240,000</text><text x="560" y="570">/µL</text>
+  </g>
+  <g stroke="#e2e8f0" stroke-width="2"><line x1="80" y1="440" x2="720" y2="440"/><line x1="80" y1="520" x2="720" y2="520"/><line x1="80" y1="600" x2="720" y2="600"/></g>
+  <rect x="80" y="700" width="640" height="100" rx="12" fill="#eff6ff"/>
+  <text x="105" y="745" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#1d4ed8">Synthetic illustration only</text>
+  <text x="105" y="775" font-family="Arial, sans-serif" font-size="16" fill="#334155">Values are not clinical measurements and do not guide care.</text>
+</svg>

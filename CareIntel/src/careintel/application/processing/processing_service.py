@@ -13,6 +13,9 @@ from careintel.application.processing.document_processor import DocumentProcesso
 from careintel.application.processing.extraction_processor import ExtractionProcessor
 from careintel.application.processing.language_processor import LanguageProcessor
 from careintel.application.processing.speech_processor import SpeechProcessor
+from careintel.application.case.case_service import CaseService
+from careintel.domain.case.commands import TransitionCaseCommand
+from careintel.domain.case.states import CaseState
 from careintel.domain.audit.events import AuditEventType
 from careintel.domain.auth.models import UserContext
 from careintel.domain.evidence.modality import EvidenceModality
@@ -48,6 +51,7 @@ class ProcessingService:
         text_repo: TextContentRepository,
         audit_repo: AuditRepository,
         access_guard: ProcessingAccessGuard,
+        case_service: CaseService | None = None,
     ) -> None:
         self.document_processor = document_processor
         self.speech_processor = speech_processor
@@ -61,6 +65,7 @@ class ProcessingService:
         self.text_repo = text_repo
         self.audit_repo = audit_repo
         self.access_guard = access_guard
+        self.case_service = case_service
         self.logger = logging.getLogger(__name__)
 
     async def trigger_processing(
@@ -203,7 +208,7 @@ class ProcessingService:
         elif command.processor_type == ProcessorType.SPEECH_TRANSCRIPTION:
             run_id = await self.speech_processor.process(evidence.id, user, correlation_id)
         elif command.processor_type == ProcessorType.LANGUAGE_NORMALIZATION:
-            if evidence.modality == EvidenceModality.TEXT.value:
+            if str(evidence.modality).lower() == EvidenceModality.TEXT.value:
                 text_record = await self.text_repo.get_for_evidence(evidence.id)
                 if text_record is None:
                     from careintel.core.errors import ValidationError
@@ -221,7 +226,22 @@ class ProcessingService:
                 target_language=str(command.parameters.get("target_language", "en")),
             )
         elif command.processor_type == ProcessorType.CANDIDATE_EXTRACTION:
-            source_run_id = self._source_run_id(command.parameters)
+            raw_source_run_id = command.parameters.get("source_processing_run_id")
+            if raw_source_run_id is None and str(evidence.modality).lower() == EvidenceModality.TEXT.value:
+                text_record = await self.text_repo.get_for_evidence(evidence.id)
+                if text_record is None:
+                    from careintel.core.errors import ValidationError
+
+                    raise ValidationError("Text evidence has no immutable text artifact.")
+                source_run_id = await self.language_processor.process(
+                    evidence.id,
+                    text_record.content,
+                    user,
+                    correlation_id,
+                    target_language="en",
+                )
+            else:
+                source_run_id = self._source_run_id(command.parameters)
             source_text = await self._text_from_source_run(evidence.id, source_run_id)
             run_id = await self.extraction_processor.process(
                 evidence.id,
@@ -264,6 +284,33 @@ class ProcessingService:
                 },
             )
         )
+
+        # A completed literal extraction is ready for clinician review. It does
+        # not imply an AI diagnosis, urgency decision, or clinical approval.
+        if (
+            command.processor_type == ProcessorType.CANDIDATE_EXTRACTION
+            and run.status == ProcessingStatus.COMPLETED.value
+            and self.case_service is not None
+        ):
+            case = await self.case_repo.get_by_id(evidence.case_id)
+            if case is not None and case.state == CaseState.INPUT_RECEIVED.value:
+                for target in (
+                    CaseState.PROCESSING,
+                    CaseState.EXTRACTING,
+                    CaseState.REVIEW_PENDING,
+                ):
+                    case = await self.case_service.transition_state(
+                        TransitionCaseCommand(
+                            case_id=evidence.case_id,
+                            actor_id=user.id,
+                            from_state=case.state,
+                            to_state=target,
+                            expected_version=case.version,
+                            reason="Candidate extraction completed; awaiting clinician review",
+                            correlation_id=correlation_id,
+                        ),
+                        user,
+                    )
         return self._to_domain(run)
 
     async def get_run(self, run_id: uuid.UUID, user: UserContext) -> ProcessingRunRecord:

@@ -43,6 +43,7 @@ export const consentApi = {
       purpose,
       notice_version: noticeVersion,
     });
+    if (requested.state === 'ACTIVE') return requested;
     return this.captureConsent(requested.id);
   },
 };

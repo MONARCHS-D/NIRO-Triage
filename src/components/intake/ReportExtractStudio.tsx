@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import Image from 'next/image';
 import {
   FileText,
@@ -9,8 +9,8 @@ import {
   ZoomOut,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   CheckCircle2,
-  AlertTriangle,
   Edit2,
   Save,
   X,
@@ -18,13 +18,12 @@ import {
   Scan,
   Loader2,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { evidenceApi } from '../../lib/api/evidence';
-import { ExtractedFact, ReportDocument } from '../../types/triage';
+import { ConfidenceLevel, ExtractedFact, ReportDocument } from '../../types/triage';
 import { useTriage } from '../../context/TriageContext';
-
-const OCR_CACHE_KEY = 'careintel_live_ocr_doc_v1';
 
 const PAGE_SECTIONS: Record<number, string> = {
   1: 'Complete Blood Count (CBC) & Hemogram',
@@ -50,11 +49,13 @@ const PAGE_SECTIONS: Record<number, string> = {
 
 interface ReportExtractStudioProps {
   initialReport?: ReportDocument;
-  onFactsExtracted?: (facts: ExtractedFact[]) => void;
+  ocrConsent?: { subjectId: string; consentId: string; aiConsentId: string };
+  onFactsExtracted?: (facts: ExtractedFact[], file?: File) => void;
 }
 
 export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
   initialReport,
+  ocrConsent,
   onFactsExtracted,
 }) => {
   const { selectedPatient } = useTriage();
@@ -66,72 +67,48 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
   const [editingFactId, setEditingFactId] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<string>('');
   const [ocrErrorMessage, setOcrErrorMessage] = useState<string | null>(null);
-  const [ocrProviderInfo, setOcrProviderInfo] = useState<string>('Azure Document Intelligence (prebuilt-layout)');
+  const [ocrProviderInfo, setOcrProviderInfo] = useState<string>('Ready for OCR');
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [scanStatusMessage, setScanStatusMessage] = useState<string>('Analyzing document layout via Azure Document Intelligence...');
+  const [scanStatusMessage, setScanStatusMessage] = useState<string>('Preparing document for the configured OCR provider...');
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [reportCategory, setReportCategory] = useState<string>('ALL');
+  const [selectedSampleDoc, setSelectedSampleDoc] = useState<string>('');
+  const [activeFile, setActiveFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Initialize or restore cached live extraction, or auto-load default report
-  useEffect(() => {
-    if (initialReport) {
-      setSelectedDoc(initialReport);
-      setFacts(initialReport.facts);
-      setHighlightedFactId(initialReport.facts[0]?.id || null);
+  const processUploadedFile = async (file: File) => {
+    if (!ocrConsent) {
+      setOcrErrorMessage('Record patient or guardian data-processing consent in New Intake before uploading a report. Use the synthetic sample for an offline demo.');
+      return;
+    }
+    const supportedFile = file.type === 'application/pdf' || file.type === 'image/png' || file.type === 'image/jpeg';
+    if (!supportedFile) {
+      setOcrErrorMessage('Choose a PDF, PNG, or JPEG report.');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setOcrErrorMessage('This file is larger than the 20 MB upload limit. Choose a smaller report.');
       return;
     }
 
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = sessionStorage.getItem(OCR_CACHE_KEY);
-        if (cached) {
-          const doc: ReportDocument = JSON.parse(cached);
-          setSelectedDoc(doc);
-          setFacts(doc.facts);
-          setHighlightedFactId(doc.facts[0]?.id || null);
-          return;
-        }
-      } catch {
-        // ignore cache parse error
-      }
-    }
-
-    // Auto-fetch and extract default PDF if not already loaded
-    loadDefaultPdf();
-  }, [initialReport]);
-
-  const loadDefaultPdf = async () => {
     setIsScanning(true);
-    setScanStatusMessage('Loading sterling_accuris_report.pdf and running live Azure Document Intelligence OCR...');
+    setSelectedDoc(null);
+    setFacts([]);
+    setHighlightedFactId(null);
+    setActiveFile(null);
+    setCurrentPage(1);
+    setScanStatusMessage('Sending the document to the configured OCR provider...');
     setOcrErrorMessage(null);
 
     try {
-      const response = await fetch('/sterling_accuris_report.pdf');
-      if (!response.ok) {
-        throw new Error('Could not fetch /sterling_accuris_report.pdf from public repository');
-      }
-      const blob = await response.blob();
-      const file = new File([blob], 'sterling_accuris_report.pdf', { type: 'application/pdf' });
-      await processUploadedFile(file);
-    } catch (err: any) {
-      console.warn('Failed auto-loading default report:', err);
-      setIsScanning(false);
-      setOcrErrorMessage(
-        err?.message || 'Failed to auto-load sterling_accuris_report.pdf. Please upload a document using the Upload button.'
-      );
-    }
-  };
-
-  const processUploadedFile = async (file: File) => {
-    setIsScanning(true);
-    setScanStatusMessage('Uploading to Azure Document Intelligence and extracting clinical parameters...');
-    setOcrErrorMessage(null);
-
-    try {
-      const res = await evidenceApi.extractDocumentOcr(file);
+      const res = await evidenceApi.extractDocumentOcr(file, ocrConsent);
+      setActiveFile(file);
 
       const extractedFactsMapped: ExtractedFact[] = (res.extracted_facts || []).map((f) => ({
         id: f.id,
-        category: f.category as any,
+        category: (['LAB_CBC', 'LAB_BIOCHEM', 'VITALS', 'HISTORY', 'EXAM'].includes(f.category)
+          ? f.category
+          : 'LAB_BIOCHEM') as ExtractedFact['category'],
         name: f.name,
         value: f.value,
         unit: f.unit,
@@ -139,9 +116,9 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
         sourceDocument: f.sourceDocument || file.name,
         sourcePage: f.sourcePage || 1,
         sourceLocation: f.sourceLocation,
-        confidence: f.confidence as any,
+        confidence: (f.confidence === 'HIGH' ? 'HIGH' : f.confidence === 'LOW' ? 'LOW' : 'MEDIUM') as ConfidenceLevel,
         confidenceScore: f.confidenceScore,
-        boundingBox: f.boundingBox || { x: 10, y: 30, width: 80, height: 5 },
+        boundingBox: f.boundingBox || undefined,
       }));
 
       const realDoc: ReportDocument = {
@@ -149,15 +126,11 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
         name: file.name,
         patientId: selectedPatient?.id || 'P-1042',
         type: file.type.includes('pdf') ? 'CBC' : 'BIOCHEMISTRY',
-        pagesCount: res.page_count || 19,
-        uploadDate: 'Today · Live Extraction',
+        pagesCount: res.page_count || 1,
+        uploadDate: 'Today - OCR processed',
         fileSizeBytes: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
         facts: extractedFactsMapped,
-        pageImages: res.page_images || (
-          file.name.toLowerCase().includes('sterling')
-            ? Array.from({ length: 19 }, (_, i) => `/reports/sterling_accuris/page_${i + 1}.jpg`)
-            : []
-        ),
+        pageImages: res.page_images || [],
       };
 
       if (res.provider) {
@@ -168,22 +141,9 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
       setFacts(extractedFactsMapped);
       setHighlightedFactId(extractedFactsMapped[0]?.id || null);
 
-      if (typeof window !== 'undefined') {
-        try {
-          sessionStorage.setItem(OCR_CACHE_KEY, JSON.stringify(realDoc));
-        } catch {
-          // ignore quota error
-        }
-      }
-
-      if (onFactsExtracted) {
-        onFactsExtracted(extractedFactsMapped);
-      }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn('Live Document OCR error:', err);
-      setOcrErrorMessage(
-        err?.message || 'Failed to extract document facts with Azure Document Intelligence. Please check the file and try again.'
-      );
+      setOcrErrorMessage(err instanceof Error ? err.message : 'OCR could not process this file. Check the document and try again.');
     } finally {
       setIsScanning(false);
     }
@@ -193,6 +153,18 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     await processUploadedFile(file);
+    e.target.value = '';
+  };
+
+  const handleClearDocument = () => {
+    setSelectedDoc(null);
+    setFacts([]);
+    setHighlightedFactId(null);
+    setCurrentPage(1);
+    setSelectedSampleDoc('');
+    setActiveFile(null);
+    setOcrErrorMessage(null);
+    setOcrProviderInfo('Ready for OCR');
   };
 
   const triggerScan = () => {
@@ -225,15 +197,39 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
 
   const handleApplyToWorkspace = () => {
     if (onFactsExtracted) {
-      onFactsExtracted(facts);
+      onFactsExtracted(facts, activeFile || undefined);
     }
   };
 
-  const isSterlingReport = selectedDoc?.name.toLowerCase().includes('sterling') ?? true;
-  const currentImageSrc =
-    selectedDoc?.pageImages?.[currentPage - 1] ||
-    (isSterlingReport ? `/reports/sterling_accuris/page_${currentPage}.jpg` : null);
-  const pageSectionTitle = PAGE_SECTIONS[currentPage] || `Clinical Analysis Panel · Page ${currentPage}`;
+  const loadSyntheticSample = () => {
+    const sourceDocument = 'CareIntel Synthetic CBC (Demo)';
+    const sampleFacts: ExtractedFact[] = [
+      { id: 'demo-hb', category: 'LAB_CBC', name: 'Hemoglobin', value: '12.8', unit: 'g/dL', referenceRange: '12.0-16.0', sourceDocument, sourcePage: 1, sourceLocation: 'Synthetic sample row 1', confidence: 'LOW', confidenceScore: 0.75 },
+      { id: 'demo-wbc', category: 'LAB_CBC', name: 'White blood cell count', value: '8,200', unit: '/uL', referenceRange: '4,000-10,000', sourceDocument, sourcePage: 1, sourceLocation: 'Synthetic sample row 2', confidence: 'LOW', confidenceScore: 0.75 },
+      { id: 'demo-platelets', category: 'LAB_CBC', name: 'Platelet count', value: '240,000', unit: '/uL', referenceRange: '150,000-400,000', sourceDocument, sourcePage: 1, sourceLocation: 'Synthetic sample row 3', confidence: 'LOW', confidenceScore: 0.75 },
+    ];
+    const sample: ReportDocument = {
+      id: 'demo-synthetic-cbc',
+      name: sourceDocument,
+      patientId: selectedPatient?.id || 'DEMO',
+      type: 'CBC',
+      pagesCount: 1,
+      uploadDate: 'Synthetic demonstration data',
+      fileSizeBytes: 'Demo fixture',
+      facts: sampleFacts,
+      pageImages: ['/reports/synthetic-cbc-demo.svg'],
+    };
+    setSelectedSampleDoc('synthetic_cbc');
+    setSelectedDoc(sample);
+    setActiveFile(null);
+    setFacts(sampleFacts);
+    setHighlightedFactId(sampleFacts[0].id);
+    setOcrProviderInfo('Synthetic sample - no OCR provider called');
+    setOcrErrorMessage(null);
+  };
+
+  const isSyntheticSample = selectedDoc?.id === 'demo-synthetic-cbc';
+  const currentImageSrc = selectedDoc?.pageImages?.[currentPage - 1] || null;
   const pageFacts = facts.filter((f) => f.sourcePage === currentPage);
 
   return (
@@ -253,17 +249,54 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
         {/* Live Controls & Document Status */}
         <div className="flex items-center gap-2">
           {selectedDoc && (
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded border border-[#E6ECF2] bg-white text-xs font-medium text-[#25364A]">
-              <FileText className="w-3.5 h-3.5 text-[#2563EB]" />
-              <span className="truncate max-w-[180px]">{selectedDoc.name}</span>
-              <span className="text-[10px] text-[#6B7B8F]">({selectedDoc.fileSizeBytes})</span>
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded border border-[#E6ECF2] bg-white text-xs font-medium text-[#25364A]">
+                <FileText className="w-3.5 h-3.5 text-[#2563EB]" />
+                <span className="truncate max-w-[180px]">{selectedDoc.name}</span>
+                <span className="text-[10px] text-[#6B7B8F]">({selectedDoc.fileSizeBytes})</span>
+              </div>
+
+              {/* Document Switcher Dropdown */}
+              <div className="relative">
+                <select
+                  value={selectedSampleDoc || (isSyntheticSample ? 'synthetic_cbc' : 'current')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedSampleDoc(val);
+                    if (val === 'synthetic_cbc') {
+                      loadSyntheticSample();
+                    } else if (val === 'upload_new') {
+                      triggerScan();
+                    }
+                  }}
+                  className="text-xs py-1 px-2.5 pr-7 rounded border border-slate-300 bg-white text-slate-700 font-medium focus:outline-none cursor-pointer appearance-none shadow-2xs"
+                >
+                  <option value="current">
+                    {selectedDoc.name}
+                  </option>
+                  <option value="synthetic_cbc">CareIntel synthetic CBC sample</option>
+                  <option value="upload_new">+ Upload different file...</option>
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
+              {/* Clear / New Intake Button */}
+              <button
+                type="button"
+                onClick={handleClearDocument}
+                title="Clear current report and start fresh intake upload"
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">New Intake</span>
+              </button>
             </div>
           )}
 
           <input
             type="file"
             ref={fileInputRef}
-            accept="image/*,.pdf"
+            accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg"
             onChange={handleFileUpload}
             className="hidden"
           />
@@ -278,20 +311,22 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
             <span>Upload File</span>
           </button>
 
-          <button
-            type="button"
-            onClick={loadDefaultPdf}
-            disabled={isScanning}
-            title="Re-run live OCR on sterling_accuris_report.pdf"
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Re-run Live OCR</span>
-          </button>
+          {selectedDoc && activeFile && (
+            <button
+              type="button"
+              onClick={() => processUploadedFile(activeFile)}
+              disabled={isScanning}
+              title="Re-run OCR on the selected report"
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Re-run Live OCR</span>
+            </button>
+          )}
 
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Azure Document Intelligence · Live
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium">
+            <span className={`w-1.5 h-1.5 rounded-full ${isScanning ? 'bg-blue-500 animate-pulse' : 'bg-slate-400'}`} />
+            {ocrProviderInfo}
           </span>
         </div>
       </div>
@@ -335,10 +370,16 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
           </div>
         </div>
       ) : selectedDoc ? (
-        <div className="bg-[#EAF8F1] border-b border-[#A7F3D0] px-4 py-2 flex items-center justify-between text-xs text-[#087443] font-medium">
+        <div className={`${isSyntheticSample ? 'bg-blue-50 border-blue-200 text-blue-800' : facts.length ? 'bg-[#EAF8F1] border-[#A7F3D0] text-[#087443]' : 'bg-amber-50 border-amber-200 text-amber-800'} border-b px-4 py-2 flex items-center justify-between text-xs font-medium`}>
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-[#16A36A] flex-shrink-0" />
-            <span>✓ {selectedDoc.name} extracted via {ocrProviderInfo}. {facts.length} parameters available for verification.</span>
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <span>
+              {isSyntheticSample
+                ? `${selectedDoc.name}: synthetic example only; no OCR was run.`
+                : facts.length
+                  ? `${selectedDoc.name} processed by ${ocrProviderInfo}. ${facts.length} values are ready for human verification.`
+                  : `${selectedDoc.name} processed by ${ocrProviderInfo}, but no structured values were found. Review the source or retry.`}
+            </span>
           </div>
           {isScanning && (
             <span className="text-[11px] font-semibold text-[#2563EB] animate-pulse flex items-center gap-1.5">
@@ -354,8 +395,179 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
         </div>
       ) : null}
 
-      {/* Main 50/50 Split Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 min-h-[560px]">
+      {/* Upload File & Dropdown UI (Rendered when NO document is loaded) */}
+      {!selectedDoc && (
+        <div className="p-6 sm:p-10 space-y-6">
+          {/* Scanning Progress if uploading/scanning */}
+          {isScanning && (
+            <div className="p-8 sm:p-12 text-center bg-blue-50/70 rounded-2xl border border-blue-200 flex flex-col items-center justify-center space-y-3">
+              <Loader2 className="w-9 h-9 text-[#2563EB] animate-spin" />
+              <h4 className="text-base font-bold text-[#102033]">Processing Clinical Document...</h4>
+              <p className="text-xs text-[#526276] max-w-md">{scanStatusMessage}</p>
+              <div className="w-56 h-1.5 bg-blue-100 rounded-full overflow-hidden mt-2">
+                <div className="h-full bg-[#2563EB] rounded-full animate-pulse w-3/4" />
+              </div>
+            </div>
+          )}
+
+          {!isScanning && (
+            <>
+              {/* Drag & Drop Upload Zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) {
+                    processUploadedFile(file);
+                  }
+                }}
+                className={`relative border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center transition-all ${
+                  isDragging
+                    ? 'border-[#2563EB] bg-blue-50/80 scale-[1.01] shadow-md ring-4 ring-blue-100'
+                    : 'border-[#CBD5E1] bg-[#F8FAFC] hover:bg-slate-50 hover:border-blue-400'
+                }`}
+              >
+                <div className="max-w-md mx-auto space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-blue-100 text-[#2563EB] flex items-center justify-center mx-auto shadow-xs">
+                    <Upload className="w-8 h-8" />
+                  </div>
+
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-[#102033]">
+                      Upload Medical Report or Lab Document
+                    </h3>
+                    <p className="text-xs sm:text-sm text-[#526276] mt-1 leading-relaxed">
+                      Drag and drop clinical PDF, scanned blood report, or pathology image directly here to begin OCR extraction.
+                    </p>
+                  </div>
+
+                  <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      icon={<Upload className="w-4 h-4" />}
+                      onClick={triggerScan}
+                      disabled={isScanning}
+                    >
+                      Browse File to Upload
+                    </Button>
+                    <Button variant="secondary" size="lg" onClick={loadSyntheticSample} disabled={isScanning}>
+                      Use Synthetic Sample
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-4 pt-2 text-[11px] text-[#6B7B8F]">
+                    <span className="flex items-center gap-1 font-medium">
+                      <FileText className="w-3.5 h-3.5 text-blue-500" />
+                      PDF (Multi-page supported)
+                    </span>
+                    <span>•</span>
+                    <span className="font-medium">PNG, JPG, JPEG</span>
+                    <span>•</span>
+                    <span className="font-medium">Up to 20 MB</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dropdown UI Section */}
+              <div className="bg-[#F8FAFC] border border-[#E6ECF2] rounded-xl p-5 sm:p-6 space-y-4 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <FileCheck className="w-4 h-4 text-[#2563EB]" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#102033]">
+                    Document Selection & Clinical Category
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Dropdown 1: Clinical Panel / Report Category Selector */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[#25364A] mb-1.5">
+                      Clinical Panel / Report Category
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={reportCategory}
+                        onChange={(e) => setReportCategory(e.target.value)}
+                        className="w-full text-xs py-2 px-3 pr-8 rounded-lg border border-slate-300 bg-white text-[#102033] font-medium focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] focus:outline-none cursor-pointer appearance-none shadow-2xs"
+                      >
+                        <option value="ALL">Auto-detect Clinical Specialty (Comprehensive)</option>
+                        <option value="CBC">Complete Blood Count (CBC) & Hemogram</option>
+                        <option value="BIOCHEM">Biochemistry & Renal Profile (Creatinine, BUN, LFT)</option>
+                        <option value="LIPID">Lipid & Cardiovascular Panel</option>
+                        <option value="DIABETES">Glycemic Profile (HbA1c & Fasting Glucose)</option>
+                        <option value="THYROID">Thyroid Function (T3, T4, TSH)</option>
+                        <option value="PRESCRIPTION">Hospital Discharge Summary / Prescription</option>
+                        <option value="OTHER">General Medical Report / Scanned Requisition</option>
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                    <p className="text-[11px] text-[#6B7B8F] mt-1">
+                    Live extraction runs only when an OCR provider is configured. The included sample is synthetic.
+                    </p>
+                  </div>
+
+                  {/* Dropdown 2: Available Hospital / Sample Document Selector */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[#25364A] mb-1.5">
+                      Or Choose Available Document
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <select
+                          value={selectedSampleDoc}
+                          onChange={(e) => {
+                            setSelectedSampleDoc(e.target.value);
+                            if (e.target.value === 'synthetic_cbc') {
+                              loadSyntheticSample();
+                            }
+                          }}
+                          disabled={isScanning}
+                          className="w-full text-xs py-2 px-3 pr-8 rounded-lg border border-slate-300 bg-white text-[#102033] font-medium focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] focus:outline-none cursor-pointer appearance-none shadow-2xs disabled:opacity-50"
+                        >
+                          <option value="">-- Select an available document to inspect --</option>
+                          <option value="synthetic_cbc">CareIntel synthetic CBC sample</option>
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                      {selectedSampleDoc && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={loadSyntheticSample}
+                          disabled={isScanning}
+                          icon={<RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />}
+                        >
+                          Load
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-[#6B7B8F] mt-1">
+                      This is fictional demonstration data. It does not run OCR or represent a patient.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Main 50/50 Split Layout (Only shown when document is selected/loaded) */}
+      {selectedDoc && (
+        <div className="grid grid-cols-1 xl:grid-cols-12 min-h-[560px]">
         {/* Left Column: Document Preview (6 cols on desktop) */}
         <div className="xl:col-span-6 bg-[#25364A]/5 border-r border-[#E6ECF2] p-4 flex flex-col justify-between">
           {/* Document Toolbar */}
@@ -462,7 +674,8 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
                   <div className="absolute inset-0 pointer-events-auto">
                     {pageFacts.map((fact) => {
                       const isHighlighted = highlightedFactId === fact.id;
-                      const box = fact.boundingBox || { x: 10, y: 30, width: 80, height: 4 };
+                      const box = fact.boundingBox;
+                      if (!box) return null;
 
                       return (
                         <div
@@ -493,18 +706,25 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
                     })}
                   </div>
                 </div>
-              ) : (
-                /* Loading state */
+              ) : isScanning ? (
                 <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center min-h-[400px]">
                   <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-3" />
                   <p className="text-sm font-semibold text-slate-700">Loading original document page...</p>
+                </div>
+              ) : (
+                <div className="p-8 text-center text-slate-600 flex flex-col items-center justify-center min-h-[400px]">
+                  <FileText className="w-10 h-10 text-slate-400 mb-3" />
+                  <p className="text-sm font-semibold text-slate-700">Document preview unavailable</p>
+                  <p className="text-xs max-w-sm mt-2">
+                    The OCR provider returned extracted content without a page image. Review the cited page and source details on the right.
+                  </p>
                 </div>
               )}
             </div>
           </div>
 
           <div className="text-[11px] text-[#6B7B8F] text-center">
-            Click on any row in the document or the table on the right to cross-verify bounding box provenance.
+            OCR coordinates appear only when the provider returns them; sample facts are clearly marked as synthetic.
           </div>
         </div>
 
@@ -513,7 +733,7 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-sm font-bold text-[#102033]">Extracted Information (AI)</h3>
+                <h3 className="text-sm font-bold text-[#102033]">Extracted Information for Review</h3>
                 <p className="text-xs text-[#6B7B8F]">
                   Structured values with provenance citations and confidence scores
                 </p>
@@ -618,7 +838,7 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
                       <span className="flex items-center gap-1">
                         <FileCheck className="w-3 h-3 text-[#2563EB]" />
                         <span>
-                          Source: Page {fact.sourcePage} · {fact.sourceLocation}
+                          Source: Page {fact.sourcePage} - {fact.sourceLocation}
                         </span>
                       </span>
                       <span
@@ -626,7 +846,9 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
                           fact.confidence === 'HIGH' ? 'text-[#087443]' : 'text-[#996500]'
                         }`}
                       >
-                        Confidence: {fact.confidence === 'HIGH' ? 'High (98%)' : 'Medium (85%)'}
+                        Confidence: {fact.confidenceScore !== undefined
+                          ? `${Math.round(fact.confidenceScore * 100)}% (${fact.confidence.toLowerCase()})`
+                          : fact.confidence.toLowerCase()}
                       </span>
                     </div>
                   </div>
@@ -638,7 +860,9 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
           {/* Bottom Confirmation Action */}
           <div className="pt-3 border-t border-[#E6ECF2] flex items-center justify-between">
             <div className="text-xs text-[#6B7B8F]">
-              All extracted facts are cited with original document coordinates.
+              {isSyntheticSample
+                ? 'Synthetic example data only. No patient document was uploaded or processed.'
+                : 'Values retain their source page and confidence; coordinates are shown when returned by OCR.'}
             </div>
             <Button
               variant="primary"
@@ -651,6 +875,7 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };

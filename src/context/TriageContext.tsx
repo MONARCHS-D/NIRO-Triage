@@ -8,6 +8,7 @@ import { reviewApi } from '../lib/api/review';
 import { escalationApi } from '../lib/api/escalation';
 import { caseApi } from '../lib/api/cases';
 import { ApiError } from '../lib/api/errors';
+import type { QueueItemResponse } from '../lib/api/types';
 
 export interface OutboxRecord {
   id: string;
@@ -55,8 +56,8 @@ const STORAGE_KEY = 'careintel_triage_patients_v1';
 const LEGACY_STORAGE_KEY = 'niro_triage_patients_v1';
 
 export function TriageProvider({ children }: { children: React.ReactNode }) {
-  const { currentUser, currentFacility } = useRole();
-  const [patients, setPatients] = useState<Patient[]>(INITIAL_PATIENTS);
+  const { currentUser, currentFacility, isAuthenticated, isOffline } = useRole();
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('P-1042');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'RED' | 'YELLOW' | 'GREEN'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -141,111 +142,84 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
   }, [patients]);
 
   const refreshCases = useCallback(async () => {
+    if (!isAuthenticated || isOffline) {
+      setIsSyncing(false);
+      return;
+    }
     setIsSyncing(true);
     setSyncError(null);
     try {
-      // Query review queue from backend
-      const queueResponse = await reviewApi.listQueue();
-      if (Array.isArray(queueResponse) && queueResponse.length > 0) {
-        console.info('Retrieved review queue from CareIntel backend:', queueResponse);
-        setPatients((prev) => {
-          const updated = [...prev];
-          queueResponse.forEach((item) => {
-            const existingIdx = updated.findIndex((p) => p.caseId === item.case_id);
-            const priorityMapped: Priority =
-              item.priority_bucket?.toUpperCase() === 'RED'
-                ? 'RED'
-                : item.priority_bucket?.toUpperCase() === 'GREEN'
-                ? 'GREEN'
-                : 'YELLOW';
-            const statusMapped: CaseStatus =
-              item.status === 'REVIEW_COMPLETE'
-                ? 'APPROVED'
-                : item.status === 'ESCALATED'
-                ? 'ESCALATED'
-                : 'PENDING_REVIEW';
+      const caseResponse = await caseApi.listCases({ limit: 100 });
+      let queueResponse: QueueItemResponse[] = [];
+      try {
+        queueResponse = await reviewApi.listQueue();
+      } catch (queueError) {
+        // Case read access is sufficient for the dashboard. Some intake roles
+        // cannot read reviewer assignment details, which are optional here.
+        if (!(queueError instanceof ApiError) || queueError.status !== 403) {
+          throw queueError;
+        }
+      }
+      const queueByCase = new Map(queueResponse.map((item) => [item.case_id, item]));
 
-            if (existingIdx >= 0) {
-              updated[existingIdx] = {
-                ...updated[existingIdx],
-                priority: priorityMapped,
-                status: statusMapped,
-                queueVersion: item.version,
-              };
-            } else {
-              // Add new backend queue case
-              const shortId = item.case_id.substring(0, 8);
-              updated.unshift({
-                id: `CASE-${shortId}`,
-                caseId: item.case_id,
-                syntheticCode: `SYN-${shortId.toUpperCase()}`,
-                name: `Referred Patient (${shortId.substring(0, 4)})`,
-                age: 38,
-                gender: 'Female',
-                primaryLanguage: 'Odia (ଓଡ଼ିଆ)',
-                translatedToEnglish: true,
-                contactMasked: '+91 98*** **412',
-                visitId: `VST-2026-${shortId.substring(0, 4)}`,
-                arrivalTime: 'Today · Active Queue',
-                chiefComplaint: 'Clinical case admitted for structured review and prioritization',
-                symptoms: [],
-                relevantHistory: ['Intake registered in CareIntel review queue'],
-                vitals: {
-                  bloodPressure: '120/80 mmHg',
-                  pulseRate: '84 bpm',
-                  temperature: '98.6 °F',
-                  spO2: '96%',
-                },
-                facts: [],
-                missingInfo: [],
-                riskFlags: [],
-                aiQuestions: [],
-                timeline: [
-                  {
-                    id: `tl-${item.case_id}`,
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    title: 'Case entered review queue',
-                    description: 'Encounter dispatched to operational triage queue',
-                    source: 'SYSTEM',
-                    actor: 'CareIntel Engine',
-                  },
-                ],
-                auditLog: [
-                  {
-                    id: `aud-${item.case_id}`,
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    actor: 'CareIntel Outbox Dispatcher',
-                    actorRole: 'System Orchestrator',
-                    action: 'ENTER_REVIEW_QUEUE',
-                    objectAffected: `Case ${item.case_id}`,
-                    details: `Priority bucket: ${item.priority_bucket}`,
-                  },
-                ],
-                status: statusMapped,
-                priority: priorityMapped,
-                facilityId: currentFacility?.id || 'a0000000-0000-0000-0000-000000000001',
-                queueVersion: item.version,
-                encounterId: item.encounter_id || undefined,
-              });
-            }
-          });
-          return updated;
-        });
-      }
-    } catch (e: any) {
-      // Non-fatal, fallback to local store
-      if (e instanceof ApiError && e.code !== 'UNAUTHORIZED') {
-        console.warn('Backend sync note:', e.message);
-      }
+      setPatients((previous) => caseResponse.map((record) => {
+        const shortId = record.case_id.slice(0, 8);
+        const cached = previous.find((patient) => patient.caseId === record.case_id);
+        const queueItem = queueByCase.get(record.case_id);
+        const bucket = queueItem?.priority_bucket?.toUpperCase();
+        const priority: Priority = bucket === 'RED' || bucket === 'YELLOW' || bucket === 'GREEN'
+          ? bucket
+          : 'GREY';
+        const status: CaseStatus = queueItem?.status === 'REVIEW_COMPLETE' || ['REVIEWED', 'REFERRED', 'COMPLETED'].includes(record.state)
+          ? 'APPROVED'
+          : record.state === 'ESCALATED' || queueItem?.status === 'ESCALATED'
+          ? 'ESCALATED'
+          : record.state === 'REVIEW_PENDING' || queueItem
+          ? 'PENDING_REVIEW'
+          : ['CREATED', 'CONSENTED'].includes(record.state)
+          ? 'CREATED'
+          : 'PROCESSING';
+
+        return {
+          ...(cached || {
+            id: `CASE-${shortId}`,
+            syntheticCode: `SYN-${shortId.toUpperCase()}`,
+            name: `Case ${shortId}`,
+            age: 0,
+            gender: 'Other' as const,
+            primaryLanguage: '—',
+            translatedToEnglish: false,
+            contactMasked: 'Not available',
+            visitId: `CASE-${shortId}`,
+            arrivalTime: new Date(record.created_at).toLocaleString(),
+            chiefComplaint: 'Open the case workspace to review submitted evidence.',
+            symptoms: [],
+            relevantHistory: [],
+            vitals: {},
+            facts: [],
+            missingInfo: [],
+            riskFlags: [],
+            aiQuestions: [],
+            timeline: [],
+            auditLog: [],
+            facilityId: record.facility_id || '',
+          }),
+          caseId: record.case_id,
+          version: record.version,
+          status,
+          priority,
+          queueVersion: queueItem?.version,
+          encounterId: queueItem?.encounter_id || undefined,
+        };
+      }));
+    } catch (e: unknown) {
+      const message = e instanceof ApiError ? e.message : 'Could not load cases from the CareIntel API.';
+      setSyncError(message);
+      console.error('Case refresh failed:', message);
     } finally {
       setIsSyncing(false);
     }
-  }, [currentFacility?.id]);
-
-  // Initial load: refresh live review queue from backend
-  useEffect(() => {
-    refreshCases();
-  }, [refreshCases]);
+  }, [isAuthenticated, isOffline]);
 
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) || patients[0] || null;
 

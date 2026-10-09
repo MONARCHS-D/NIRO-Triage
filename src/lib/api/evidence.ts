@@ -30,7 +30,7 @@ export const evidenceApi = {
     const formData = new FormData();
     formData.append('case_id', params.caseId);
     formData.append('consent_id', params.consentId);
-    formData.append('modality', params.modality.toUpperCase());
+    formData.append('modality', params.modality.toLowerCase());
     
     if (params.encounterId) {
       formData.append('encounter_id', params.encounterId);
@@ -69,8 +69,20 @@ export const evidenceApi = {
   /**
    * Run interactive Azure Document Intelligence OCR and extract clinical facts from a PDF or image.
    */
-  async extractDocumentOcr(file: File | Blob, fileName?: string): Promise<OcrExtractionResult> {
+  async extractDocumentOcr(
+    file: File | Blob,
+    consentContext?: { subjectId: string; consentId: string; aiConsentId: string },
+    fileName?: string
+  ): Promise<OcrExtractionResult> {
+    if (!consentContext) {
+      throw new Error('Record patient or guardian data-processing and AI analysis consent in New Intake before using OCR.');
+    }
     const formData = new FormData();
+    if (consentContext) {
+      formData.append('synthetic_subject_id', consentContext.subjectId);
+      formData.append('consent_id', consentContext.consentId);
+      formData.append('ai_consent_id', consentContext.aiConsentId);
+    }
     if (fileName && file instanceof Blob && !(file instanceof File)) {
       formData.append('file', file, fileName);
     } else {

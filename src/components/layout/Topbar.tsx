@@ -56,7 +56,7 @@ export const Topbar: React.FC = () => {
             <span>Simulate Arrival</span>
           </button>
           <span className="hidden md:inline text-slate-400">|</span>
-          <span className="hidden lg:inline text-slate-300 text-[10px] sm:text-[11px]">Retention: session-scoped (Synthetic)</span>
+          <span className="hidden lg:inline text-slate-300 text-[10px] sm:text-[11px]">Locally cached intake data stays in this browser until Reset Demo</span>
           <button
             onClick={resetToDefaults}
             title="Reset synthetic data to default state"

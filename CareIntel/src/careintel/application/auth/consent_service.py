@@ -62,6 +62,43 @@ class ConsentService:
         correlation_id: str,
     ) -> ConsentContext:
         """Record a request for consent (e.g. presented to the user)."""
+        existing = await self.consent_repo.get_by_subject_purpose_version(
+            subject_id, purpose, notice_version
+        )
+        if existing is not None:
+            # Request retries must be safe under the existing unique constraint.
+            # An active record already satisfies this request; a pending one can
+            # be captured with its original ID. A withdrawn record can be
+            # requested again while retaining its event history.
+            if existing.state == "WITHDRAWN":
+                existing.state = "REQUESTED"
+                existing.captured_at = None
+                existing.withdrawn_at = None
+                existing.captured_by = None
+                await self.consent_repo.add_event(
+                    ConsentEventORM(
+                        consent_id=existing.id,
+                        event_type="REQUESTED",
+                        actor_id=None,
+                    )
+                )
+                await self.audit_repo.append(
+                    AuditLogORM(
+                        event_type=AuditEventType.CONSENT_REQUESTED,
+                        target_id=existing.id,
+                        target_type="consent",
+                        correlation_id=correlation_id,
+                        outcome="SUCCESS",
+                    )
+                )
+            return ConsentContext(
+                id=existing.id,
+                subject_id=existing.subject_id,
+                purpose=existing.purpose,
+                notice_version=existing.notice_version,
+                state=existing.state,
+            )
+
         consent = ConsentORM(
             id=uuid.uuid4(),
             subject_id=subject_id,

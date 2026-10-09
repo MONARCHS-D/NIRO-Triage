@@ -217,10 +217,13 @@ export interface ProcessingRunResponse {
   run_id: string;
   evidence_id: string;
   processor_type: string;
+  provider?: string;
   status: string;
+  config_version?: string;
   created_at?: string;
   started_at?: string | null;
   completed_at?: string | null;
+  failure_reason?: string | null;
   error_category?: string | null;
   error_detail?: string | null;
   output_artifact?: Record<string, any> | null;

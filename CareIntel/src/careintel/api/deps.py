@@ -286,6 +286,7 @@ def get_processing_service(
     request: Request,
     session: DbSessionDep,
     settings: SettingsDep,
+    case_service: Annotated[CaseService, Depends(get_case_service)],
     blob_provider: Annotated[BlobStoragePort, Depends(get_blob_provider)],
     ocr_provider: Annotated[OcrProvider, Depends(get_ocr_provider)],
     speech_provider: Annotated[SpeechProvider, Depends(get_speech_provider)],
@@ -357,6 +358,7 @@ def get_processing_service(
         text_repo=TextContentRepository(session),
         audit_repo=AuditRepository(session),
         access_guard=access_guard,
+        case_service=case_service,
     )
 
 

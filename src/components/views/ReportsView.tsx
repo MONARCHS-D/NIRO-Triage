@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ReportExtractStudio } from '../intake/ReportExtractStudio';
 import { evidenceApi } from '../../lib/api/evidence';
-import { ExtractedFact, ReportDocument } from '../../types/triage';
-import { FileText, Upload, Plus, CheckCircle2, Search, Info, X } from 'lucide-react';
+import { ConfidenceLevel, ExtractedFact, ReportDocument } from '../../types/triage';
+import { Upload, Plus, Info, X } from 'lucide-react';
 import { Button } from '../common/Button';
 
 export const ReportsView: React.FC = () => {
@@ -20,7 +20,9 @@ export const ReportsView: React.FC = () => {
         const res = await evidenceApi.extractDocumentOcr(file);
         const mappedFacts: ExtractedFact[] = (res.extracted_facts || []).map((f) => ({
           id: f.id,
-          category: f.category as any,
+          category: (['LAB_CBC', 'LAB_BIOCHEM', 'VITALS', 'HISTORY', 'EXAM'].includes(f.category)
+            ? f.category
+            : 'LAB_BIOCHEM') as ExtractedFact['category'],
           name: f.name,
           value: f.value,
           unit: f.unit,
@@ -28,9 +30,9 @@ export const ReportsView: React.FC = () => {
           sourceDocument: f.sourceDocument || file.name,
           sourcePage: f.sourcePage || 1,
           sourceLocation: f.sourceLocation,
-          confidence: f.confidence as any,
+          confidence: (f.confidence === 'HIGH' ? 'HIGH' : f.confidence === 'LOW' ? 'LOW' : 'MEDIUM') as ConfidenceLevel,
           confidenceScore: f.confidenceScore,
-          boundingBox: f.boundingBox || { x: 10, y: 30, width: 80, height: 6 },
+          boundingBox: f.boundingBox || undefined,
         }));
         const newDoc: ReportDocument = {
           id: `doc-${Date.now()}`,
@@ -46,6 +48,7 @@ export const ReportsView: React.FC = () => {
         setUploadNotice(true);
       } catch (err) {
         console.warn('Failed OCR extraction from header upload:', err);
+        setUploadNotice(true);
       }
     }
   };
@@ -99,9 +102,9 @@ export const ReportsView: React.FC = () => {
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4 text-blue-600 flex-shrink-0" />
             <span>
-              Document selected! For interactive OCR field extraction and binding to a patient record, you can also launch the{' '}
-              <Link href="/intake/report" className="font-semibold underline">
-                Report Intake Studio
+              OCR requires patient or guardian consent first. Start a new intake to capture consent and attach the report to its case: {' '}
+              <Link href="/intake" className="font-semibold underline">
+                New Intake
               </Link>.
             </span>
           </div>

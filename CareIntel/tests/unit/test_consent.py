@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
+from careintel.application.auth.consent_service import ConsentService
 from careintel.core.errors import ConsentError
 from careintel.domain.consent.models import ConsentContext
 from careintel.domain.consent.policy import ConsentPolicy
@@ -39,6 +40,58 @@ async def test_consent_repository_flushes_parent_before_initial_event() -> None:
         call.add(event),
         call.flush([event]),
     ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_repeated_consent_request_reuses_existing_record() -> None:
+    subject_id = uuid.uuid4()
+    consent = ConsentORM(
+        id=uuid.uuid4(),
+        subject_id=subject_id,
+        purpose=ConsentPurpose.DATA_PROCESSING.value,
+        notice_version="1.0",
+        state="ACTIVE",
+    )
+    consent_repo = AsyncMock()
+    consent_repo.get_by_subject_purpose_version.return_value = consent
+    audit_repo = AsyncMock()
+    service = ConsentService(consent_repo, audit_repo)
+
+    result = await service.request_consent(
+        subject_id,
+        ConsentPurpose.DATA_PROCESSING.value,
+        "1.0",
+        "retry-correlation",
+    )
+
+    assert result.id == consent.id
+    assert result.state == "ACTIVE"
+    consent_repo.create.assert_not_awaited()
+    audit_repo.append.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_synthetic_consent_subject_gets_disabled_database_identity() -> None:
+    from careintel.api.v1.consent.router import _ensure_subject_identity
+    from careintel.persistence.models.user import UserORM
+
+    session = MagicMock()
+    session.get = AsyncMock(return_value=None)
+    session.flush = AsyncMock()
+    subject_id = uuid.uuid4()
+
+    await _ensure_subject_identity(session, subject_id)
+
+    subject = session.add.call_args.args[0]
+    assert isinstance(subject, UserORM)
+    assert subject.id == subject_id
+    assert subject.email.endswith("@subjects.invalid")
+    assert subject.is_active is False
+    assert subject.is_verified is False
+    assert subject.password_hash
+    session.flush.assert_awaited_once_with()
 
 
 @pytest.mark.unit

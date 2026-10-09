@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from careintel.api.deps import (
     CurrentUserDep,
@@ -45,6 +45,22 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 
 CaseServiceDep = Annotated[CaseService, Depends(get_case_service)]
 EncounterServiceDep = Annotated[EncounterService, Depends(get_encounter_service)]
+
+
+@router.get(
+    "",
+    response_model=list[CaseResponse],
+    dependencies=[require_permission(Permission.CASE_READ)],
+)
+async def list_cases(
+    case_service: CaseServiceDep,
+    user: CurrentUserDep,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> list[CaseResponse]:
+    """List recent cases visible to the signed-in reviewer."""
+    cases = await case_service.list_cases(user, limit=limit, offset=offset)
+    return [CaseResponse.model_validate(case, from_attributes=True) for case in cases]
 
 
 @router.post(

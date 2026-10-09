@@ -1,0 +1,189 @@
+{
+  "startedAt": "2026-10-09T19:05:37.549Z",
+  "steps": [
+    {
+      "name": "1. Log in as Triage Nurse (Sunita B.)",
+      "status": "PASSED"
+    },
+    {
+      "name": "2. Navigate to Manual Patient Intake (/intake)",
+      "status": "PASSED"
+    },
+    {
+      "name": "3. Inspect Intake Elements & Patient Intake Form",
+      "status": "FAILED",
+      "error": "Unexpectedly redirected to /auth/login - session lost"
+    },
+    {
+      "name": "4. Verify Triage Queue (/queue)",
+      "status": "FAILED",
+      "error": "Redirected to /auth/login on queue view"
+    },
+    {
+      "name": "5. Test Clinical Workstation Drawer & AI Diff Modal",
+      "status": "PASSED"
+    },
+    {
+      "name": "6. Test Report OCR Studio (/intake/report)",
+      "status": "PASSED"
+    },
+    {
+      "name": "7. Test Voice Intake Studio (/intake/voice)",
+      "status": "PASSED"
+    },
+    {
+      "name": "8. Test Settings View (/settings)",
+      "status": "FAILED",
+      "error": "Navigation timeout of 30000 ms exceeded"
+    }
+  ],
+  "networkRequests": [
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/auth/login",
+      "status": 200,
+      "bodyLength": 0
+    },
+    {
+      "method": "POST",
+      "url": "http://localhost:8000/api/v1/auth/login",
+      "status": 200,
+      "bodyLength": 410
+    },
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "bodyLength": 0
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "bodyLength": 287
+    },
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 0
+    },
+    {
+      "method": "OPTIONS",
+      "url": "http://localhost:8000/api/v1/cases?limit=100",
+      "status": 200,
+      "bodyLength": 0
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 99
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 99
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "bodyLength": 287
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 99
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "bodyLength": 287
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 99
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 99
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "bodyLength": 287
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 98
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 99
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "bodyLength": 287
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 99
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 98
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "bodyLength": 287
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 98
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 99
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/auth/me",
+      "status": 200,
+      "bodyLength": 0
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "bodyLength": 0
+    }
+  ],
+  "backendErrors": [],
+  "frontendErrors": [],
+  "completedAt": "2026-10-09T19:07:26.413Z"
+}

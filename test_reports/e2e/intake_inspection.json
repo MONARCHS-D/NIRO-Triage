@@ -1,0 +1,41 @@
+{
+  "consoleLogs": [
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"
+    },
+    {
+      "type": "log",
+      "text": "[HMR] connected"
+    },
+    {
+      "type": "warn",
+      "text": "Image with src \"/illustrations/auth/clinic_community_hero.jpg\" is using quality \"95\" which is not configured in images.qualities [75]. Please update your config to [75, 95].\nRead more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities"
+    },
+    {
+      "type": "verbose",
+      "text": "[DOM] Input elements should have autocomplete attributes (suggested: \"current-password\"): (More info: https://goo.gl/9p2vKq) %o"
+    },
+    {
+      "type": "log",
+      "text": "[Fast Refresh] rebuilding"
+    }
+  ],
+  "networkLogs": [
+    {
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "body": ""
+    },
+    {
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "body": ""
+    },
+    {
+      "url": "http://localhost:8000/api/v1/health/ready",
+      "status": 200,
+      "body": "{\"status\":\"ready\",\"checks\":{\"database\":\"ok\",\"redis\":\"ok\",\"blob_storage\":\"ok\"},\"latency_ms\":1752.51}"
+    }
+  ]
+}
