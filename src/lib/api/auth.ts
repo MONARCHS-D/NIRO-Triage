@@ -3,7 +3,7 @@
  */
 
 import { apiFetch, setAuthToken } from './client';
-import { LoginRequest, TokenResponse, UserProfileResponse } from './types';
+import { LoginRequest, RolePermissionsItem, TokenResponse, UserProfileResponse } from './types';
 
 export const authApi = {
   /**
@@ -39,6 +39,15 @@ export const authApi = {
    */
   async getMe(): Promise<UserProfileResponse> {
     return apiFetch<UserProfileResponse>('/auth/me', {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Fetch statutory role permission table from the database registry.
+   */
+  async getRolePermissions(): Promise<RolePermissionsItem[]> {
+    return apiFetch<RolePermissionsItem[]>('/auth/roles/permissions', {
       method: 'GET',
     });
   },

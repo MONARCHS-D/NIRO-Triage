@@ -131,35 +131,34 @@ const STAFF_DIRECTORY_KEY = 'careintel_staff_directory_v1';
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [facilities] = useState<Facility[]>(INITIAL_FACILITIES);
-  const [users, setUsers] = useState<UserProfile[]>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STAFF_DIRECTORY_KEY);
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch {
-          // ignore error
+  const [users, setUsers] = useState<UserProfile[]>(INITIAL_USERS);
+  const [currentUser, setCurrentUser] = useState<UserProfile>(INITIAL_USERS[0]);
+
+  // Synchronize client-persisted preferences safely after hydration
+  useEffect(() => {
+    try {
+      const storedSidebar = localStorage.getItem(SIDEBAR_STORAGE_KEY) ?? localStorage.getItem(LEGACY_SIDEBAR_STORAGE_KEY);
+      if (storedSidebar !== null) {
+        setIsSidebarCollapsed(storedSidebar === 'true');
+      }
+
+      const storedStaff = localStorage.getItem(STAFF_DIRECTORY_KEY);
+      if (storedStaff) {
+        const parsed = JSON.parse(storedStaff);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setUsers(parsed);
+          setCurrentUser(parsed[0]);
         }
       }
-    }
-    return INITIAL_USERS;
-  });
-  const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STAFF_DIRECTORY_KEY);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed[0];
-          }
-        } catch {
-          // ignore
-        }
+
+      const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY) ?? localStorage.getItem(LEGACY_AUTH_STORAGE_KEY);
+      if (storedAuth !== null) {
+        setIsAuthenticated(storedAuth !== 'false');
       }
+    } catch {
+      // ignore
     }
-    return INITIAL_USERS[0];
-  });
+  }, []);
 
   // Synchronize currentUser whenever users array updates (e.g. status suspension or role edit)
   useEffect(() => {
@@ -173,21 +172,9 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
   const [lastStaffRole, setLastStaffRole] = useState<UserRole>('DOCTOR');
   const [isOffline, setIsOffline] = useState<boolean>(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY) ?? localStorage.getItem(LEGACY_AUTH_STORAGE_KEY);
-      return stored !== 'false';
-    }
-    return true;
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY) ?? localStorage.getItem(LEGACY_SIDEBAR_STORAGE_KEY);
-      return stored === 'true';
-    }
-    return false;
-  });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarCollapsed((prev) => {

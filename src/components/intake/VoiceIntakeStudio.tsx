@@ -14,10 +14,12 @@ import {
   ArrowRight,
   Volume2,
   Languages,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { LanguageSelector } from '../common/LanguageSelector';
 import { SUPPORTED_LANGUAGES, LanguageOption } from '../../lib/audioSimulator';
+import { audioApi } from '../../lib/api/audio';
 import { Symptom } from '../../types/triage';
 import { useRole } from '../../context/RoleContext';
 
@@ -51,6 +53,9 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
   const [durationSeconds, setDurationSeconds] = useState<number>(0);
   const [transcriptText, setTranscriptText] = useState<string>('');
   const [translationText, setTranslationText] = useState<string>('');
+  const [extractedSymptoms, setExtractedSymptoms] = useState<Symptom[]>([]);
+  const [sttProviderInfo, setSttProviderInfo] = useState<string>('Azure OpenAI STT');
+  const [liveErrorMessage, setLiveErrorMessage] = useState<string>('');
   const [waveHeights, setWaveHeights] = useState<number[]>([
     20, 35, 60, 45, 80, 55, 90, 70, 40, 65, 85, 30, 45, 95, 60, 40, 75, 50, 30, 20,
   ]);
@@ -139,7 +144,7 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
     }
   };
 
-  const stopAndProcess = () => {
+  const stopAndProcess = async () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
         mediaRecorderRef.current.stop();
@@ -149,25 +154,56 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
       }
     }
     setVoiceState('PROCESSING');
-    setTimeout(() => {
+    setLiveErrorMessage('');
+
+    // Yield briefly to ensure recorder ondataavailable flushes the final audio chunk
+    await new Promise((r) => setTimeout(r, 200));
+
+    try {
       setVoiceState('TRANSCRIBING');
-      setTranscriptText(selectedLang.sampleTranscript);
 
-      setTimeout(() => {
-        setTranslationText(selectedLang.sampleTranslation);
+      let audioBlob: Blob;
+      if (audioChunksRef.current.length > 0) {
+        const mime = audioChunksRef.current[0].type || 'audio/webm';
+        audioBlob = new Blob(audioChunksRef.current, { type: mime });
+      } else {
+        audioBlob = new Blob([new Uint8Array(1024)], { type: 'audio/webm' });
+      }
+
+      const res = await audioApi.transcribeAudio(
+        audioBlob,
+        `intake_${selectedLang.code}_${Date.now()}.webm`,
+        selectedLang.code
+      );
+
+      if (res && res.transcript && res.transcript.trim()) {
+        setTranscriptText(res.transcript);
+        setTranslationText(res.translation || res.transcript);
+        if (res.provider) setSttProviderInfo(res.provider);
+
+        const parsedSyms: Symptom[] = (res.symptoms || []).map((s, idx) => ({
+          id: `sym-voice-${Date.now()}-${idx}`,
+          name: s.name,
+          duration: s.duration,
+          severity: (s.severity || 'MODERATE').toUpperCase() as any,
+          source: 'VOICE',
+          confidence: 0.98,
+        }));
+        setExtractedSymptoms(parsedSyms);
         setVoiceState('SUCCESS');
-      }, 900);
-    }, 800);
-  };
-
-  const triggerUncertainty = () => {
-    setVoiceState('UNCERTAIN');
-    setTranscriptText(selectedLang.sampleTranscript.substring(0, 35) + '... [ଗୁଣୁଗୁଣୁ ସ୍ୱର / inaudible]');
-    setTranslationText(selectedLang.sampleTranslation.substring(0, 40) + '... [audio segment unclear]');
-  };
-
-  const triggerFailure = () => {
-    setVoiceState('FAILURE');
+      } else {
+        setVoiceState('UNCERTAIN');
+        setLiveErrorMessage(
+          'No audible speech detected in recording. Please try speaking closer to the microphone and record again.'
+        );
+      }
+    } catch (err: any) {
+      console.warn('Live STT transcription note:', err);
+      setVoiceState('FAILURE');
+      setLiveErrorMessage(
+        err?.message || 'Could not connect to live STT engine. Verify backend connection.'
+      );
+    }
   };
 
   const resetRecording = () => {
@@ -184,6 +220,8 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
     setDurationSeconds(0);
     setTranscriptText('');
     setTranslationText('');
+    setExtractedSymptoms([]);
+    setLiveErrorMessage('');
   };
 
   const formatTime = (totalSec: number) => {
@@ -194,20 +232,11 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
 
   const handleFinish = () => {
     if (onComplete) {
-      const parsedSymptoms: Symptom[] = selectedLang.sampleSymptoms.map((s, idx) => ({
-        id: `sym-voice-${Date.now()}-${idx}`,
-        name: s.name,
-        duration: s.duration,
-        severity: s.severity,
-        source: 'VOICE',
-        confidence: 0.96,
-      }));
-
       onComplete({
         language: `${selectedLang.name} (${selectedLang.nativeName})`,
-        transcript: transcriptText || selectedLang.sampleTranscript,
-        translation: translationText || selectedLang.sampleTranslation,
-        symptoms: parsedSymptoms,
+        transcript: transcriptText,
+        translation: translationText,
+        symptoms: extractedSymptoms,
       });
     }
   };
@@ -226,22 +255,12 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
           </p>
         </div>
 
-        {/* Demo trigger pills */}
+        {/* Live cloud engine status pill */}
         <div className="flex items-center gap-1.5 text-xs">
-          <button
-            type="button"
-            onClick={triggerUncertainty}
-            className="px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-800 text-[11px] hover:bg-amber-100 cursor-pointer"
-          >
-            Simulate Uncertainty
-          </button>
-          <button
-            type="button"
-            onClick={triggerFailure}
-            className="px-2 py-1 rounded border border-red-200 bg-red-50 text-red-700 text-[11px] hover:bg-red-100 cursor-pointer"
-          >
-            Simulate Failure
-          </button>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Azure Neural STT · Live
+          </span>
         </div>
       </div>
 
@@ -434,7 +453,7 @@ export const VoiceIntakeStudio: React.FC<VoiceIntakeStudioProps> = ({
                 <div>
                   <h4 className="text-xs font-bold text-[#102033]">Audio Input Interrupted or Unclear</h4>
                   <p className="text-[11px] text-[#6B7B8F] mt-0.5 max-w-xs mx-auto leading-normal">
-                    Could not cleanly isolate speech audio. Tap below to retry recording or enter symptoms via keyboard.
+                    {liveErrorMessage || 'Could not cleanly isolate speech audio. Tap below to retry recording or enter symptoms via keyboard.'}
                   </p>
                 </div>
                 <div className="flex items-center justify-center gap-2 pt-1">

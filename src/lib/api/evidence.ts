@@ -65,4 +65,68 @@ export const evidenceApi = {
       method: 'GET',
     });
   },
+
+  /**
+   * Run interactive Azure Document Intelligence OCR and extract clinical facts from a PDF or image.
+   */
+  async extractDocumentOcr(file: File | Blob, fileName?: string): Promise<OcrExtractionResult> {
+    const formData = new FormData();
+    if (fileName && file instanceof Blob && !(file instanceof File)) {
+      formData.append('file', file, fileName);
+    } else {
+      formData.append('file', file);
+    }
+    return apiFetch<OcrExtractionResult>('/evidence/ocr-extract', {
+      method: 'POST',
+      body: formData,
+      timeoutMs: 180000,
+    });
+  },
 };
+
+export interface OcrExtractionResult {
+  document_name: string;
+  page_count: number;
+  file_size_bytes: number;
+  provider: string;
+  pages: {
+    page_number: number;
+    width: number;
+    height: number;
+    unit: string;
+  }[];
+  page_images?: string[];
+  regions: {
+    page_number: number;
+    text: string;
+    reading_order: number;
+    bounding_box?: number[] | null;
+  }[];
+  tables: {
+    page_number: number;
+    row_count: number;
+    column_count: number;
+    markdown: string;
+  }[];
+  extracted_facts: {
+    id: string;
+    category: string;
+    name: string;
+    value: string;
+    unit: string;
+    referenceRange?: string | null;
+    sourceDocument: string;
+    sourcePage: number;
+    sourceLocation: string;
+    confidence: 'HIGH' | 'MODERATE' | 'LOW' | string;
+    confidenceScore: number;
+    interpretation?: string | null;
+    boundingBox?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null;
+  }[];
+}
+

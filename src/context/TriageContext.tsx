@@ -56,20 +56,7 @@ const LEGACY_STORAGE_KEY = 'niro_triage_patients_v1';
 
 export function TriageProvider({ children }: { children: React.ReactNode }) {
   const { currentUser, currentFacility } = useRole();
-  const [patients, setPatients] = useState<Patient[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
-        if (saved) {
-          return JSON.parse(saved);
-        }
-      } catch (e) {
-        console.error('Failed to load patients from local storage:', e);
-      }
-    }
-    return INITIAL_PATIENTS;
-  });
-
+  const [patients, setPatients] = useState<Patient[]>(INITIAL_PATIENTS);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('P-1042');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'RED' | 'YELLOW' | 'GREEN'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -78,25 +65,33 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
 
   const OUTBOX_STORAGE_KEY = 'careintel_triage_outbox_v1';
   const LEGACY_OUTBOX_STORAGE_KEY = 'niro_triage_outbox_v1';
-  const [outbox, setOutbox] = useState<OutboxRecord[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(OUTBOX_STORAGE_KEY) ?? localStorage.getItem(LEGACY_OUTBOX_STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to load outbox from local storage:', e);
+  const [outbox, setOutbox] = useState<OutboxRecord[]>([]);
+  const isHydratedRef = React.useRef(false);
+
+  // Safely hydrate from localStorage post-mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (saved) {
+        setPatients(JSON.parse(saved));
       }
+      const savedOutbox = localStorage.getItem(OUTBOX_STORAGE_KEY) ?? localStorage.getItem(LEGACY_OUTBOX_STORAGE_KEY);
+      if (savedOutbox) {
+        setOutbox(JSON.parse(savedOutbox));
+      }
+    } catch (e) {
+      console.error('Failed to load triage state from local storage:', e);
+    } finally {
+      isHydratedRef.current = true;
     }
-    return [];
-  });
+  }, []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(outbox));
-      } catch (e) {
-        console.error('Failed to save outbox to local storage:', e);
-      }
+    if (!isHydratedRef.current) return;
+    try {
+      localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(outbox));
+    } catch (e) {
+      console.error('Failed to save outbox to local storage:', e);
     }
   }, [outbox]);
 
@@ -137,12 +132,11 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
 
   // Persist to localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
-      } catch (e) {
-        console.error('Failed to save patients to local storage:', e);
-      }
+    if (!isHydratedRef.current) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
+    } catch (e) {
+      console.error('Failed to save patients to local storage:', e);
     }
   }, [patients]);
 

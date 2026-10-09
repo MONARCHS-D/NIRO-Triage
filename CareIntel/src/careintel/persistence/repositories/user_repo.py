@@ -102,6 +102,16 @@ class UserRepository:
             role_facilities[role_name] = facility_id
         return role_facilities
 
+    async def get_all_roles_with_permissions(self) -> list[RoleORM]:
+        """Fetch all roles ordered by name with attached permissions."""
+        stmt = (
+            select(RoleORM)
+            .options(selectinload(RoleORM.permissions))
+            .order_by(RoleORM.name)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_user_context(self, user_id: uuid.UUID) -> UserContext | None:
         user = await self.get_with_roles(user_id)
         if user is None:

@@ -63,12 +63,22 @@ class AzureSpeechProvider(SpeechProvider):
         async with httpx.AsyncClient(timeout=300.0) as client:
             with open(file_path, "rb") as f:
                 filename = os.path.basename(file_path)
+                ext = os.path.splitext(filename)[1].lower()
+                mime_map = {
+                    ".wav": "audio/wav",
+                    ".webm": "audio/webm",
+                    ".mp3": "audio/mpeg",
+                    ".ogg": "audio/ogg",
+                    ".m4a": "audio/m4a",
+                    ".mp4": "audio/mp4",
+                }
+                content_type = mime_map.get(ext, "audio/wav")
                 files = {
                     "file": (
                         filename,
                         f,
-                        "audio/mpeg",
-                    )  # Will adapt based on actual file, but basic mpeg is fine for fallback
+                        content_type,
+                    )
                 }
                 response = await client.post(url, headers=headers, data=data, files=files)
 

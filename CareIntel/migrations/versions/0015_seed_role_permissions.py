@@ -108,6 +108,8 @@ REVIEWER_PERMISSIONS = [
     "escalation:write",
 ]
 
+ADMIN_PERMISSIONS = ALL_PERMISSIONS[:]
+
 
 def upgrade() -> None:
     # 1. Insert any missing permissions into the permissions table
@@ -177,7 +179,7 @@ def upgrade() -> None:
     )
 
     # 6. Assign All permissions to Admin
-    all_perms_sql = "', '".join(ALL_PERMISSIONS)
+    admin_perms_sql = "', '".join(ADMIN_PERMISSIONS)
     op.execute(
         f"""
         INSERT INTO role_permissions (role_id, permission_id)
@@ -185,7 +187,7 @@ def upgrade() -> None:
         FROM roles AS r
         CROSS JOIN permissions AS p
         WHERE r.name = 'admin'
-          AND p.code IN ('{all_perms_sql}')
+          AND p.code IN ('{admin_perms_sql}')
         ON CONFLICT DO NOTHING
         """
     )

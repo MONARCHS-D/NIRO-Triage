@@ -26,3 +26,12 @@ class UserProfileResponse(BaseModel):
     permissions: list[str]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RolePermissionsItem(BaseModel):
+    role: str
+    permission_count: int
+    permissions: list[str]
+
+    model_config = ConfigDict(from_attributes=True)
+

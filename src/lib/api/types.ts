@@ -67,6 +67,13 @@ export interface UserProfileResponse {
   permissions: string[];
 }
 
+export interface RolePermissionsItem {
+  role: string;
+  permission_count: number;
+  permissions: string[];
+}
+
+
 // ── Consent ─────────────────────────────────────────────────────────────────
 export type ConsentPurpose =
   | 'data_processing'

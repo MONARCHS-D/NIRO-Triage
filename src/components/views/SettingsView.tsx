@@ -48,6 +48,82 @@ type SettingsTab =
   | 'privacy'
   | 'diagnostics';
 
+interface RoleMatrixItem {
+  role: UserRole;
+  title: string;
+  scope: string;
+  authority: string;
+  decisionRights: string[];
+  badgeColor: string;
+  dotColor: string;
+  permissionCount: number;
+  keyPermissions: string[];
+  description: string;
+}
+
+const ROLE_MATRIX_DEFINITIONS: RoleMatrixItem[] = [
+  {
+    role: 'ADMIN',
+    title: 'Facility Administrator (System)',
+    scope: 'System & Institutional Operations',
+    authority: 'Full Administrative & Clinical Emergency Oversight',
+    decisionRights: ['System Administration', 'Audit Forensics', 'Staff Provisioning', 'Emergency Override'],
+    badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
+    dotColor: 'bg-purple-500',
+    permissionCount: 26,
+    keyPermissions: ['manage:users', 'manage:system', 'recipient:manage', 'case:*', 'evidence:*', 'ai:*', 'review:*'],
+    description: 'Statutory authority to provision clinical credentials, configure diagnostic routing, and govern facility access.',
+  },
+  {
+    role: 'DOCTOR',
+    title: 'Medical Officer / Attending Physician',
+    scope: 'Primary Health Center (PHC/CHC)',
+    authority: 'Authoritative Clinical Sign-off & AI Advisory Acceptance',
+    decisionRights: ['Run Advisory AI', 'Accept AI Drafts', 'Priority Override', 'Final Note Sign-off', 'Referral Dispatch'],
+    badgeColor: 'bg-blue-100 text-blue-800 border-blue-200',
+    dotColor: 'bg-blue-500',
+    permissionCount: 23,
+    keyPermissions: ['ai:write', 'review:write', 'escalation:write', 'referral:write', 'handoff:write', 'case:write'],
+    description: 'Senior medical practitioner legally authorized to finalize case decisions, accept AI differential drafts, and dispatch patient referrals.',
+  },
+  {
+    role: 'NURSE',
+    title: 'Staff Nurse Grade-I',
+    scope: 'Outpatient & Acute Triage Desk',
+    authority: 'Bedside Intake, Vital Sign Monitoring & Observations',
+    decisionRights: ['Patient Intake', 'Vital Capture', 'Audit Notes', 'Observation Logging'],
+    badgeColor: 'bg-teal-100 text-teal-800 border-teal-200',
+    dotColor: 'bg-teal-500',
+    permissionCount: 11,
+    keyPermissions: ['case:read', 'case:write', 'evidence:read', 'evidence:write', 'review:read', 'review:write'],
+    description: 'Performs patient triage, enters vital telemetry, extracts diagnostic lab reports, and appends nursing assessment notes.',
+  },
+  {
+    role: 'HEALTH_WORKER',
+    title: 'Community Health Officer (CHO)',
+    scope: 'Sub-Centre & Rural Camp Outreach',
+    authority: 'Frontline Screening & Multimodal Voice Intake',
+    decisionRights: ['Multimodal Intake', 'Voice/Speech Capture', 'Demographics', 'Consent Capture'],
+    badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    dotColor: 'bg-indigo-500',
+    permissionCount: 9,
+    keyPermissions: ['case:read', 'case:write', 'consent:read', 'consent:write', 'evidence:read', 'evidence:write'],
+    description: 'Collects vernacular patient speech recordings, registers primary symptoms, and routes preliminary observations to attending physicians.',
+  },
+  {
+    role: 'PATIENT',
+    title: 'Citizen Portal / Mobile View',
+    scope: 'Patient Self-Service',
+    authority: 'Self-reported Symptoms & Informed Consent',
+    decisionRights: ['Self-Report Intake', 'Consent Verification', 'Queue Tracking'],
+    badgeColor: 'bg-slate-100 text-slate-700 border-slate-200',
+    dotColor: 'bg-slate-400',
+    permissionCount: 0,
+    keyPermissions: ['consent:read', 'consent:write', 'case:read'],
+    description: 'Allows patients to verify digital consent, self-report non-urgent symptoms, and monitor their active triage queue position.',
+  },
+];
+
 export const SettingsView: React.FC = () => {
   const {
     currentUser,
@@ -341,11 +417,18 @@ export const SettingsView: React.FC = () => {
             ) : (
               <div className="space-y-6">
                 {/* Metric Summary Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div className="bg-white p-3.5 rounded-xl border border-[#E6ECF2] shadow-xs">
                     <span className="text-[11px] font-bold text-[#6B7B8F] uppercase block">Total Staff</span>
                     <span className="text-xl font-bold text-[#102033] block mt-0.5">{users.length}</span>
                     <span className="text-[10px] text-emerald-600 font-medium">Provisioned in Registry</span>
+                  </div>
+                  <div className="bg-white p-3.5 rounded-xl border border-[#E6ECF2] shadow-xs">
+                    <span className="text-[11px] font-bold text-[#6B7B8F] uppercase block">System Admins</span>
+                    <span className="text-xl font-bold text-purple-600 block mt-0.5">
+                      {users.filter((u) => u.role === 'ADMIN' && u.status !== 'SUSPENDED').length}
+                    </span>
+                    <span className="text-[10px] text-[#526276]">Security &amp; IT Governance</span>
                   </div>
                   <div className="bg-white p-3.5 rounded-xl border border-[#E6ECF2] shadow-xs">
                     <span className="text-[11px] font-bold text-[#6B7B8F] uppercase block">Medical Officers</span>
@@ -592,6 +675,121 @@ export const SettingsView: React.FC = () => {
                     <span>
                       Access audit logs are cryptographically sealed. Practitioner role adjustments take effect across active triage stations immediately.
                     </span>
+                  </div>
+                </div>
+
+                {/* Statutory Role-Based Access Control (RBAC) Permissions Matrix Table */}
+                <div className="bg-white rounded-xl border border-[#E6ECF2] shadow-xs overflow-hidden">
+                  <div className="p-5 border-b border-[#E6ECF2] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-[#2563EB]" />
+                        <h3 className="text-sm font-bold text-[#102033]">
+                          Statutory Role Permissions Matrix (RBAC Contract)
+                        </h3>
+                      </div>
+                      <p className="text-xs text-[#6B7B8F] mt-0.5">
+                        Authoritative clinical decision entitlements, AI execution rights, and backend migration 0015 permission mappings
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      PostgreSQL Engine · Enforced
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#F1F5F9] text-[#526276] font-semibold border-b border-[#E6ECF2]">
+                        <tr>
+                          <th className="py-3 px-4">Role Persona &amp; Governance Scope</th>
+                          <th className="py-3 px-4">Clinical Decision Rights</th>
+                          <th className="py-3 px-4">Key RBAC Entitlements</th>
+                          <th className="py-3 px-4 text-center">Perm Count</th>
+                          <th className="py-3 px-4 text-right">Statutory Tier</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E6ECF2]">
+                        {ROLE_MATRIX_DEFINITIONS.map((def) => {
+                          const isAdmin = def.role === 'ADMIN';
+                          return (
+                            <tr
+                              key={def.role}
+                              className={`hover:bg-[#F8FAFC] transition-colors ${
+                                isAdmin ? 'bg-purple-50/40' : ''
+                              }`}
+                            >
+                              <td className="py-3.5 px-4">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold border ${def.badgeColor}`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full ${def.dotColor}`} />
+                                      {def.title}
+                                    </span>
+                                    {isAdmin && (
+                                      <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-700 uppercase">
+                                        Primary Row
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-[#526276] leading-relaxed max-w-xs">
+                                    {def.description}
+                                  </p>
+                                </div>
+                              </td>
+
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-wrap gap-1 max-w-xs">
+                                  {def.decisionRights.map((right) => (
+                                    <span
+                                      key={right}
+                                      className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-[#25364A]"
+                                    >
+                                      {right}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-wrap gap-1 max-w-sm">
+                                  {def.keyPermissions.map((perm) => (
+                                    <code
+                                      key={perm}
+                                      className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-[#164FD6] border border-blue-100"
+                                    >
+                                      {perm}
+                                    </code>
+                                  ))}
+                                </div>
+                              </td>
+
+                              <td className="py-3.5 px-4 text-center">
+                                <span className="inline-block px-2 py-0.5 rounded font-mono font-bold text-xs bg-slate-100 text-[#102033]">
+                                  {def.permissionCount}
+                                </span>
+                              </td>
+
+                              <td className="py-3.5 px-4 text-right">
+                                <span className="text-[11px] font-semibold text-[#526276] block">
+                                  {def.scope}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="p-3 bg-[#F8FAFC] border-t border-[#E6ECF2] flex items-center justify-between text-[11px] text-[#6B7B8F]">
+                    <div className="flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-[#2563EB]" />
+                      <span>Role permissions are enforced server-side on every API request. Zero-trust boundary applied.</span>
+                    </div>
+                    <span className="font-mono text-[10px] text-[#526276]">CareIntel RBAC 0015 Standard</span>
                   </div>
                 </div>
               </div>

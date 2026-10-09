@@ -3,18 +3,50 @@
 import React, { useState, useRef } from 'react';
 import Link from 'next/link';
 import { ReportExtractStudio } from '../intake/ReportExtractStudio';
-import { SAMPLE_REPORTS, ReportDocument } from '../../lib/ocrSimulator';
+import { evidenceApi } from '../../lib/api/evidence';
+import { ExtractedFact, ReportDocument } from '../../types/triage';
 import { FileText, Upload, Plus, CheckCircle2, Search, Info, X } from 'lucide-react';
 import { Button } from '../common/Button';
 
 export const ReportsView: React.FC = () => {
-  const [selectedDoc, setSelectedDoc] = useState<ReportDocument>(SAMPLE_REPORTS[0]);
+  const [selectedDoc, setSelectedDoc] = useState<ReportDocument | undefined>(undefined);
   const [uploadNotice, setUploadNotice] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setUploadNotice(true);
+      const file = e.target.files[0];
+      try {
+        const res = await evidenceApi.extractDocumentOcr(file);
+        const mappedFacts: ExtractedFact[] = (res.extracted_facts || []).map((f) => ({
+          id: f.id,
+          category: f.category as any,
+          name: f.name,
+          value: f.value,
+          unit: f.unit,
+          referenceRange: f.referenceRange || undefined,
+          sourceDocument: f.sourceDocument || file.name,
+          sourcePage: f.sourcePage || 1,
+          sourceLocation: f.sourceLocation,
+          confidence: f.confidence as any,
+          confidenceScore: f.confidenceScore,
+          boundingBox: f.boundingBox || { x: 10, y: 30, width: 80, height: 6 },
+        }));
+        const newDoc: ReportDocument = {
+          id: `doc-${Date.now()}`,
+          name: file.name,
+          patientId: 'P-1042',
+          type: file.type.includes('pdf') ? 'CBC' : 'BIOCHEMISTRY',
+          pagesCount: res.page_count || 1,
+          uploadDate: 'Today · Just now',
+          fileSizeBytes: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+          facts: mappedFacts,
+        };
+        setSelectedDoc(newDoc);
+        setUploadNotice(true);
+      } catch (err) {
+        console.warn('Failed OCR extraction from header upload:', err);
+      }
     }
   };
 

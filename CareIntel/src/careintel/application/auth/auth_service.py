@@ -5,6 +5,7 @@ Authentication application service.
 from __future__ import annotations
 
 import datetime
+from typing import Any
 import uuid
 
 from careintel.application.auth.password_hasher import PasswordHasher
@@ -157,3 +158,16 @@ class AuthService:
                     outcome="SUCCESS",
                 )
             )
+
+    async def get_role_permissions_table(self) -> list[dict[str, Any]]:
+        """Retrieve the complete role-permissions table across all registered roles."""
+        roles = await self.user_repo.get_all_roles_with_permissions()
+        return [
+            {
+                "role": role.name,
+                "permission_count": len(role.permissions),
+                "permissions": sorted(p.code for p in role.permissions),
+            }
+            for role in roles
+        ]
+

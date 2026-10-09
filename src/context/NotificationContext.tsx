@@ -227,49 +227,43 @@ function playTriageChime(isUrgent: boolean = false) {
 }
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [notifications, setNotifications] = useState<TriageNotification[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY) ?? localStorage.getItem(LEGACY_NOTIFICATIONS_STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to load notifications:', e);
-      }
-    }
-    return INITIAL_NOTIFICATIONS;
-  });
-
+  const [notifications, setNotifications] = useState<TriageNotification[]>(INITIAL_NOTIFICATIONS);
   const [toasts, setToasts] = useState<ArrivalToast[]>([]);
-
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(SOUND_STORAGE_KEY) ?? localStorage.getItem(LEGACY_SOUND_STORAGE_KEY);
-        if (saved !== null) return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to load sound setting:', e);
-      }
-    }
-    return true;
-  });
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const isHydratedRef = React.useRef(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications));
-      } catch (e) {
-        console.error('Failed to persist notifications:', e);
+    try {
+      const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY) ?? localStorage.getItem(LEGACY_NOTIFICATIONS_STORAGE_KEY);
+      if (saved) {
+        setNotifications(JSON.parse(saved));
       }
+      const savedSound = localStorage.getItem(SOUND_STORAGE_KEY) ?? localStorage.getItem(LEGACY_SOUND_STORAGE_KEY);
+      if (savedSound !== null) {
+        setSoundEnabled(JSON.parse(savedSound));
+      }
+    } catch (e) {
+      console.error('Failed to load notifications:', e);
+    } finally {
+      isHydratedRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isHydratedRef.current) return;
+    try {
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications));
+    } catch (e) {
+      console.error('Failed to persist notifications:', e);
     }
   }, [notifications]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(SOUND_STORAGE_KEY, JSON.stringify(soundEnabled));
-      } catch (e) {
-        console.error('Failed to persist sound setting:', e);
-      }
+    if (!isHydratedRef.current) return;
+    try {
+      localStorage.setItem(SOUND_STORAGE_KEY, JSON.stringify(soundEnabled));
+    } catch (e) {
+      console.error('Failed to persist sound setting:', e);
     }
   }, [soundEnabled]);
 

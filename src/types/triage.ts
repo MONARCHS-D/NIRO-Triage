@@ -33,6 +33,18 @@ export interface ExtractedFact {
   editedAt?: string;
 }
 
+export interface ReportDocument {
+  id: string;
+  name: string;
+  patientId: string;
+  type: string;
+  pagesCount: number;
+  uploadDate: string;
+  fileSizeBytes: string;
+  facts: ExtractedFact[];
+  pageImages?: string[];
+}
+
 export interface Symptom {
   id: string;
   name: string;

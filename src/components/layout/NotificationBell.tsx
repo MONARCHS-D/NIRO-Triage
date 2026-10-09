@@ -39,9 +39,14 @@ export const NotificationBell: React.FC = () => {
   const { setSelectedPatientId } = useTriage();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [filter, setFilter] = useState<'ALL' | 'URGENT' | 'ARRIVALS' | 'AI'>('ALL');
   const [showDemoMenu, setShowDemoMenu] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close on click outside or escape key
   useEffect(() => {
@@ -298,11 +303,11 @@ export const NotificationBell: React.FC = () => {
         <Bell className="w-4 h-4" />
 
         {/* Urgent Badge or Normal Badge */}
-        {urgentUnreadCount > 0 ? (
+        {mounted && urgentUnreadCount > 0 ? (
           <span className="absolute -top-1 -right-1 flex items-center justify-center rounded-full h-4 w-4 bg-red-600 text-[9px] font-bold text-white shadow-xs">
             {urgentUnreadCount}
           </span>
-        ) : unreadCount > 0 ? (
+        ) : mounted && unreadCount > 0 ? (
           <span className="absolute -top-1 -right-1 flex items-center justify-center rounded-full h-4 w-4 bg-[#164FD6] text-[9px] font-bold text-white shadow-xs">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>

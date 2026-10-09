@@ -44,12 +44,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
 
   return (
     <aside
+      suppressHydrationWarning
       className={`${
         isSidebarCollapsed ? 'w-16' : 'w-60'
       } flex-shrink-0 bg-white border-r border-[#E6ECF2] flex flex-col h-screen sticky top-0 select-none z-40 transition-all duration-200`}
     >
       {/* Brand Header */}
-      <div className={`p-4 border-b border-[#E6ECF2] flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+      <div
+        suppressHydrationWarning
+        className={`p-4 border-b border-[#E6ECF2] flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}
+      >
         <Link
           href="/dashboard"
           className="flex items-center gap-2.5 overflow-hidden"

@@ -7,7 +7,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 
 from careintel.api.deps import CurrentUserDep, RawTokenDep, get_auth_service
-from careintel.api.v1.auth.schemas import LoginRequest, TokenResponse, UserProfileResponse
+from careintel.api.v1.auth.schemas import (
+    LoginRequest,
+    RolePermissionsItem,
+    TokenResponse,
+    UserProfileResponse,
+)
 from careintel.application.auth.auth_service import AuthService
 from careintel.core.correlation import get_correlation_id
 
@@ -71,3 +76,21 @@ async def get_current_user_profile(
         roles=list(current_user.roles),
         permissions=list(current_user.permissions),
     )
+
+
+@router.get(
+    "/roles/permissions",
+    response_model=list[RolePermissionsItem],
+    status_code=status.HTTP_200_OK,
+    summary="Get authoritative role permission table",
+)
+async def get_role_permissions_table(
+    current_user: CurrentUserDep,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> list[RolePermissionsItem]:
+    """
+    Get the complete role-permission mapping table from the authoritative database registry.
+    """
+    items = await auth_service.get_role_permissions_table()
+    return [RolePermissionsItem(**item) for item in items]
+
