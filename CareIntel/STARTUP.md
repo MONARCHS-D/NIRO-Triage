@@ -5,6 +5,9 @@ Run commands from the repository root unless a section explicitly says otherwise
 below reflect the current `pyproject.toml`, application composition root, migrations, scripts,
 workers, and API routes.
 
+For this application's Linux checkout, see [LOCAL_SETUP.md](LOCAL_SETUP.md) for
+the installed environment and the single-command API/worker/outbox launcher.
+
 CareIntel is a non-diagnostic, human-in-the-loop healthcare triage-support backend. PostgreSQL is
 the authoritative store for application and workflow state. Redis and Celery deliver asynchronous
 work but do not own business state. Azure Blob Storage holds source evidence objects. Azure AI

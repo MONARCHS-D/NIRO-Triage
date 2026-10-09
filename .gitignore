@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!/CareIntel/.env.example
+
+# Project-local backend tooling and process logs
+/.tools/
+/CareIntel/.run/
 
 # vercel
 .vercel
