@@ -14,6 +14,7 @@ import {
   Cloud,
 } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
+import { DEMO_MODE } from '../../lib/api/config';
 import { useTriage } from '../../context/TriageContext';
 import { UserRole } from '../../types/roles';
 import { BackendHealthBadge } from '../common/BackendHealthBadge';
@@ -45,23 +46,23 @@ export const Topbar: React.FC = () => {
           <span>Educational prototype — triage-support only. Not a medical diagnosis or treatment system.</span>
         </div>
         <div className="flex items-center gap-3 text-slate-300">
-          <button
+          {DEMO_MODE && <button
             onClick={() => simulateIncomingArrival('RED')}
             title="Trigger a real-time emergency arrival popup on the right side"
             className="flex items-center gap-1 text-amber-300 hover:text-white transition-colors cursor-pointer text-[11px] font-semibold"
           >
             <Bell className="w-3 h-3 text-amber-400" />
             <span>Simulate Arrival</span>
-          </button>
+          </button>}
           <span className="hidden md:inline text-slate-400">|</span>
-          <span className="hidden sm:inline">Retention: session-scoped (Synthetic Data)</span>
-          <button
+          <span className="hidden sm:inline">{DEMO_MODE ? 'Synthetic demo data' : 'Authorized document evidence'}</span>
+          {DEMO_MODE && <button
             onClick={resetToDefaults}
             title="Reset synthetic data to default state"
             className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3 h-3" /> Reset Demo
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -112,6 +113,7 @@ export const Topbar: React.FC = () => {
             <User className="w-3.5 h-3.5 text-[#2563EB] absolute left-2.5 pointer-events-none" />
             <select
               id="role-select"
+              disabled={!DEMO_MODE}
               value={currentUser.role}
               onChange={(e) => setUserRole(e.target.value as UserRole)}
               className="pl-7 pr-7 py-1.5 text-xs font-semibold bg-[#E8F0FF] border border-blue-200 rounded-md text-[#164FD6] hover:bg-blue-100 focus:outline-none cursor-pointer appearance-none"

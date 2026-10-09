@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, status
 
 from careintel.api.deps import get_current_user, get_processing_service
 from careintel.api.v1.processing.schemas import (
+    DocumentResultsResponse,
     ProcessingRunResponse,
     TriggerProcessingRequest,
     TriggerProcessingResponse,
@@ -20,6 +21,17 @@ from careintel.domain.processing.processing_commands import TriggerProcessingCom
 from careintel.domain.processing.processor_type import ProcessorType
 
 router = APIRouter(prefix="/processing", tags=["processing"])
+
+
+@router.get("/documents/{evidence_id}/results", response_model=DocumentResultsResponse)
+async def get_document_results(
+    evidence_id: uuid.UUID,
+    current_user: Annotated[UserContext, Depends(get_current_user)],
+    processing_service: Annotated[ProcessingService, Depends(get_processing_service)],
+) -> DocumentResultsResponse:
+    return DocumentResultsResponse.model_validate(
+        await processing_service.get_document_results(evidence_id, current_user)
+    )
 
 
 @router.post(

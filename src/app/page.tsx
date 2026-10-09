@@ -6,15 +6,16 @@ import { useRole } from '../context/RoleContext';
 
 export default function RootPage() {
   const router = useRouter();
-  const { isAuthenticated } = useRole();
+  const { isAuthenticated, isAuthLoading } = useRole();
 
   useEffect(() => {
+    if (isAuthLoading) return;
     if (isAuthenticated) {
       router.replace('/dashboard');
     } else {
       router.replace('/auth/login');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isAuthLoading, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">

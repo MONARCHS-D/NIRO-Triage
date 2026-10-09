@@ -163,7 +163,7 @@ export default function QueuePage() {
                         <span className="text-[10px] text-[#6B7B8F] font-mono">{patient.syntheticCode}</span>
                       </td>
                       <td className="py-3.5 px-4 text-[#25364A] whitespace-nowrap tabular-nums">
-                        {patient.age}y / {patient.gender[0]}
+                        {patient.age ?? 'Not provided'}y / {patient.gender?.[0] ?? 'Not provided'}
                       </td>
                       <td className="py-3.5 px-4 text-[#25364A] max-w-xs truncate">
                         {patient.chiefComplaint}

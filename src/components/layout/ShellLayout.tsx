@@ -16,14 +16,17 @@ interface ShellLayoutProps {
 
 export const ShellLayout: React.FC<ShellLayoutProps> = ({ children }) => {
   const router = useRouter();
-  const { viewMode, setViewMode, setUserRole, isAuthenticated, isSessionExpired, setIsSessionExpired } = useRole();
+  const { viewMode, setViewMode, setUserRole, isAuthenticated, isAuthLoading, isSessionExpired, setIsSessionExpired } = useRole();
 
   // Route guard per Section 40
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthLoading && !isAuthenticated) {
       router.push('/auth/login');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isAuthLoading, router]);
+
+  if (isAuthLoading) return <p role="status" className="p-6">Verifying session…</p>;
+  if (!isAuthenticated) return null;
 
   // If in Patient Mobile Experience mode, render mobile viewport
   if (viewMode === 'PATIENT_MOBILE') {

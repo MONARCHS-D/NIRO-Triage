@@ -49,36 +49,18 @@ export const PatientWorkspaceView: React.FC<PatientWorkspaceViewProps> = ({
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
+  const workspaceGeneration = React.useRef(0);
   const fetchWorkspace = React.useCallback(async () => {
+    const requestGeneration = ++workspaceGeneration.current;
+    setWorkspaceData(null);
+    setWorkspaceError(null);
     if (!selectedPatient?.caseId) return;
     setIsLoadingWorkspace(true);
     setWorkspaceError(null);
     try {
-      let data: Record<string, any> | null = null;
-      try {
-        data = await reviewApi.getWorkspace(selectedPatient.caseId);
-      } catch (err: any) {
-        // If unassigned or authorization error, attempt auto-assignment if reviewer id is present
-        if (currentUser?.id) {
-          try {
-            await reviewApi.assignReviewer(selectedPatient.caseId, {
-              reviewer_id: currentUser.id,
-              expected_version: selectedPatient.queueVersion || 1,
-            });
-            await reviewApi.startReview(selectedPatient.caseId, {
-              expected_version: (selectedPatient.queueVersion || 1) + 1,
-            });
-            data = await reviewApi.getWorkspace(selectedPatient.caseId);
-          } catch (assignErr) {
-            console.warn('Reviewer auto-assignment note:', assignErr);
-            throw err;
-          }
-        } else {
-          throw err;
-        }
-      }
+      const data = await reviewApi.getWorkspace(selectedPatient.caseId);
 
-      if (data) {
+      if (data && requestGeneration === workspaceGeneration.current) {
         setWorkspaceData(data);
         // Sync draft ID and version if available from backend
         const primaryDraft = data.ai_content?.drafts?.[0];
@@ -92,14 +74,15 @@ export const PatientWorkspaceView: React.FC<PatientWorkspaceViewProps> = ({
       }
     } catch (err: any) {
       console.warn('Backend workspace fetch note:', err?.message || err);
-      setWorkspaceError(err?.message || 'Operating with local triage memory');
+      if (requestGeneration === workspaceGeneration.current) setWorkspaceError('Workspace unavailable. Check case access and session.');
     } finally {
-      setIsLoadingWorkspace(false);
+      if (requestGeneration === workspaceGeneration.current) setIsLoadingWorkspace(false);
     }
   }, [selectedPatient?.caseId, selectedPatient?.id, selectedPatient?.queueVersion, currentUser?.id, updatePatient]);
 
   React.useEffect(() => {
-    fetchWorkspace();
+    void fetchWorkspace();
+    return () => { workspaceGeneration.current++; };
   }, [fetchWorkspace]);
 
   if (!selectedPatient) {

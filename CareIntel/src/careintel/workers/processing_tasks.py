@@ -28,6 +28,8 @@ async def _handle_processing(session: Any, task: AsyncTask, actor: Any) -> dict[
         task.correlation_id,
     )
     if result.status == ProcessingStatus.FAILED:
+        # Persist the sanitized failed run before durable task retry handling.
+        await session.commit()
         transient_names = {
             "AzureError",
             "ClientConnectionError",

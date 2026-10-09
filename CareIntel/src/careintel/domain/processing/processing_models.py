@@ -104,6 +104,11 @@ class ExtractionProvenance:
     span_start: int | None = None
     span_end: int | None = None
     raw_source_text: str | None = None
+    # Explicit source row metadata; never inferred from clinical ranges.
+    source_unit: str | None = None
+    reference_interval: str | None = None
+    source_flag: str | None = None
+    comparison: str | None = None
 
 
 @dataclass(frozen=True)

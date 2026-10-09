@@ -87,8 +87,8 @@ export default function VoiceIntakePage() {
     notifyArrival({
       patientId: newId,
       patientName: newPatient.name,
-      patientAge: newPatient.age,
-      patientGender: newPatient.gender,
+      patientAge: newPatient.age ?? undefined,
+      patientGender: newPatient.gender ?? undefined,
       department: 'Voice Studio / OPD',
       priority: newPatient.priority,
       chiefComplaint: newPatient.chiefComplaint,

@@ -29,6 +29,26 @@ from careintel.domain.evidence.modality import EvidenceModality
 router = APIRouter(prefix="/evidence", tags=["evidence"])
 
 
+@router.get("/cases/{case_id}/upload-context", response_model=dict[str, uuid.UUID])
+async def get_upload_context(
+    case_id: uuid.UUID,
+    user: CurrentUserDep,
+    service: Annotated[EvidenceService, Depends(get_evidence_service)],
+) -> dict[str, uuid.UUID]:
+    return await service.get_upload_context(case_id, user)
+
+
+@router.get("/cases/{case_id}", response_model=list[EvidenceResponse])
+async def list_case_evidence(
+    case_id: uuid.UUID,
+    user: CurrentUserDep,
+    service: Annotated[EvidenceService, Depends(get_evidence_service)],
+) -> list[EvidenceResponse]:
+    return [
+        EvidenceResponse.model_validate(item) for item in await service.list_for_case(case_id, user)
+    ]
+
+
 @router.post(
     "/text",
     response_model=EvidenceResponse,
@@ -128,3 +148,15 @@ async def download_evidence(
     expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=ttl)
 
     return SecureDownloadResponse(download_url=url, expires_at=expires_at)
+
+
+@router.post("/{evidence_id}/scan", response_model=EvidenceResponse)
+async def retry_scan(
+    evidence_id: uuid.UUID,
+    user: CurrentUserDep,
+    service: Annotated[EvidenceService, Depends(get_evidence_service)],
+    correlation_id: Annotated[str, Depends(get_correlation_id)],
+) -> EvidenceResponse:
+    return EvidenceResponse.model_validate(
+        await service.retry_scan(evidence_id, user, correlation_id)
+    )

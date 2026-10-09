@@ -25,9 +25,11 @@ from careintel.core.correlation import CorrelationIDMiddleware
 from careintel.core.database import build_engine, build_session_factory, dispose_engine
 from careintel.core.errors import register_exception_handlers
 from careintel.core.logging import configure_logging, get_logger
-from careintel.infrastructure.extraction.demo_provider import DemoExtractionProvider
 from careintel.infrastructure.language.demo_provider import DemoLanguageProvider
-from careintel.infrastructure.ocr.demo_provider import DemoOcrProvider
+from careintel.infrastructure.processing_providers import (
+    build_extraction_provider,
+    build_ocr_provider,
+)
 from careintel.infrastructure.scanner.noop_scanner import NoOpScanner
 from careintel.infrastructure.storage.azure_provider import AzureBlobProvider
 from careintel.infrastructure.storage.fake_provider import FakeBlobProvider
@@ -92,7 +94,16 @@ def create_app() -> FastAPI:
             _app.state.blob_provider = FakeBlobProvider()
 
         # Initialize Scanner
-        _app.state.content_scanner = NoOpScanner()
+        if settings.content_scanner_provider == "clamav":
+            from careintel.infrastructure.scanner.clamav_scanner import ClamAvScanner
+
+            _app.state.content_scanner = ClamAvScanner(
+                _app.state.blob_provider, settings.content_scanner_timeout_seconds
+            )
+        elif settings.content_scanner_provider == "pending":
+            _app.state.content_scanner = NoOpScanner()
+        else:
+            raise ValueError("Unsupported content scanner provider.")
 
         # Initialize Providers
         # ── LLM Provider ──────────────────────────────────────────────────────────
@@ -170,28 +181,12 @@ def create_app() -> FastAPI:
 
             _app.state.tts_provider = DemoTTSProvider()
 
-        # ── OCR Provider ──────────────────────────────────────────────────────────
-        if (
-            settings.ocr_provider == "azure_document_intelligence"
-            and settings.azure_document_intelligence_endpoint
-            and settings.azure_document_intelligence_key
-        ):
-            from careintel.infrastructure.ocr.azure_provider import (
-                AzureDocumentIntelligenceProvider,
-            )
-
-            _app.state.ocr_provider = AzureDocumentIntelligenceProvider(
-                endpoint=settings.azure_document_intelligence_endpoint,
-                key=settings.azure_document_intelligence_key.get_secret_value(),
-                model=settings.azure_di_model,
-            )
-        else:
-            _app.state.ocr_provider = DemoOcrProvider()
+        _app.state.ocr_provider = build_ocr_provider(settings)
 
         # Other Demo Providers
         _app.state.language_provider = DemoLanguageProvider()
         _app.state.translation_provider = DemoTranslationProvider()
-        _app.state.extraction_provider = DemoExtractionProvider()
+        _app.state.extraction_provider = build_extraction_provider(settings)
 
         logger.info("CareIntel startup complete — ready to serve traffic")
         try:

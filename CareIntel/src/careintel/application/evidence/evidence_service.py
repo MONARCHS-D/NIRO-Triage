@@ -4,6 +4,7 @@ Evidence Management application service.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import AsyncIterator
 from typing import IO
@@ -394,7 +395,47 @@ class EvidenceService:
                 evidence_orm, EvidenceState.QUARANTINED, user.id, correlation_id, "Scan REJECTED"
             )
 
+        logging.getLogger(__name__).info(
+            "Document upload persisted",
+            extra={
+                "document_id": str(evidence_id),
+                "case_id": str(evidence_orm.case_id),
+                "status": evidence_orm.state,
+                "correlation_id": correlation_id,
+            },
+        )
         return self._to_domain(evidence_orm)
+
+    async def retry_scan(
+        self, evidence_id: uuid.UUID, user: UserContext, correlation_id: str
+    ) -> EvidenceAggregate:
+        evidence = await self.evidence_repo.get_by_id(evidence_id)
+        if evidence is None:
+            raise NotFoundError("Evidence not found.")
+        case = await self._get_authorized_case(evidence.case_id, user, Permission.EVIDENCE_WRITE)
+        self._require_case_accepts_evidence_changes(case)
+        # Recheck active consent before accessing the original binary.
+        consent = await self.consent_repo.get_active(
+            case.synthetic_subject_id, "data_processing", "1.0"
+        )
+        if consent is None:
+            from careintel.core.errors import ConsentError
+
+            raise ConsentError()
+        await self._require_data_processing_consent(consent.id, case)
+        if evidence.state != EvidenceState.STORED.value or not evidence.storage_key:
+            from careintel.core.errors import ValidationError
+
+            raise ValidationError("Only stored evidence awaiting scanning can be rescanned.")
+        result = await self.scanner.scan(evidence_id, evidence.storage_key)
+        if result in {ScanResult.CLEAN, ScanResult.REJECTED}:
+            target = (
+                EvidenceState.READY if result == ScanResult.CLEAN else EvidenceState.QUARANTINED
+            )
+            await self._transition_evidence_state(
+                evidence, target, user.id, correlation_id, f"Scan {result.value}"
+            )
+        return self._to_domain(evidence)
 
     async def _async_file_reader(self, file_stream: IO[bytes]) -> AsyncIterator[bytes]:
         """Convert a synchronous file stream to an AsyncIterator for Azure."""
@@ -450,6 +491,22 @@ class EvidenceService:
         await self._get_authorized_case(case_id, user, Permission.EVIDENCE_READ)
         orms = await self.evidence_repo.get_by_case_id(case_id)
         return [self._to_domain(o) for o in orms]
+
+    async def get_upload_context(
+        self, case_id: uuid.UUID, user: UserContext
+    ) -> dict[str, uuid.UUID]:
+        """Resolve existing consent for an authorized case, without creating consent."""
+        case = await self._get_authorized_case(case_id, user, Permission.EVIDENCE_WRITE)
+        self._require_case_accepts_evidence_changes(case)
+        consent = await self.consent_repo.get_active(
+            case.synthetic_subject_id, ConsentPurpose.DATA_PROCESSING.value, "1.0"
+        )
+        if consent is None:
+            from careintel.core.errors import ConsentError
+
+            raise ConsentError()
+        await self._require_data_processing_consent(consent.id, case)
+        return {"case_id": case.id, "consent_id": consent.id}
 
     async def generate_secure_download_url(
         self, evidence_id: uuid.UUID, user: UserContext, correlation_id: str

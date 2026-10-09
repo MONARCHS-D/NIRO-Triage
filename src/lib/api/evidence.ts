@@ -6,6 +6,15 @@ import { apiFetch } from './client';
 import { EvidenceModality, EvidenceResponse, RegisterTextRequest, SecureDownloadResponse } from './types';
 
 export const evidenceApi = {
+  async retryScan(evidenceId: string): Promise<EvidenceResponse> {
+    return apiFetch(`/evidence/${evidenceId}/scan`, {method: 'POST'});
+  },
+  async listCaseEvidence(caseId: string): Promise<EvidenceResponse[]> {
+    return apiFetch(`/evidence/cases/${caseId}`, { cache: 'no-store' });
+  },
+  async getUploadContext(caseId: string): Promise<{case_id: string; consent_id: string}> {
+    return apiFetch(`/evidence/cases/${caseId}/upload-context`, { cache: 'no-store' });
+  },
   /**
    * Register direct text-based evidence for a case.
    */
@@ -30,7 +39,7 @@ export const evidenceApi = {
     const formData = new FormData();
     formData.append('case_id', params.caseId);
     formData.append('consent_id', params.consentId);
-    formData.append('modality', params.modality.toUpperCase());
+    formData.append('modality', params.modality.toLowerCase());
     
     if (params.encounterId) {
       formData.append('encounter_id', params.encounterId);
@@ -43,6 +52,7 @@ export const evidenceApi = {
     }
 
     return apiFetch<EvidenceResponse>('/evidence/files', {
+      timeoutMs: 180000,
       method: 'POST',
       body: formData,
     });

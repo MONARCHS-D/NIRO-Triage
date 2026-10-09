@@ -4,12 +4,16 @@
 
 import { apiFetch } from './client';
 import {
+  DocumentResultsResponse,
   ProcessingRunResponse,
   TriggerProcessingRequest,
   TriggerProcessingResponse,
 } from './types';
 
 export const processingApi = {
+  async getDocumentResults(evidenceId: string): Promise<DocumentResultsResponse> {
+    return apiFetch(`/processing/documents/${evidenceId}/results`, { cache: 'no-store' });
+  },
   /**
    * Execute a processing step synchronously and return its terminal state.
    */

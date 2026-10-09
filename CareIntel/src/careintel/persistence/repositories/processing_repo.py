@@ -31,16 +31,28 @@ class ProcessingRepository:
     async def get_run_by_idempotency_key(
         self, evidence_id: uuid.UUID, processor_type: str, config_version: str
     ) -> ProcessingRunORM | None:
-        stmt = select(ProcessingRunORM).where(
-            ProcessingRunORM.evidence_id == evidence_id,
-            ProcessingRunORM.processor_type == processor_type,
-            ProcessingRunORM.config_version == config_version,
+        stmt = (
+            select(ProcessingRunORM)
+            .where(
+                ProcessingRunORM.evidence_id == evidence_id,
+                ProcessingRunORM.processor_type == processor_type,
+                ProcessingRunORM.config_version == config_version,
+            )
+            .with_for_update()
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def list_runs_for_evidence(self, evidence_id: uuid.UUID) -> Sequence[ProcessingRunORM]:
-        stmt = select(ProcessingRunORM).where(ProcessingRunORM.evidence_id == evidence_id)
+        stmt = (
+            select(ProcessingRunORM)
+            .where(ProcessingRunORM.evidence_id == evidence_id)
+            .order_by(
+                ProcessingRunORM.started_at.desc().nulls_last(),
+                ProcessingRunORM.created_at.desc(),
+                ProcessingRunORM.id.desc(),
+            )
+        )
         result = await self.session.execute(stmt)
         return result.scalars().all()
 

@@ -16,7 +16,7 @@ class TriggerProcessingRequest(BaseModel):
     """Request schema to trigger a processing run."""
 
     evidence_id: uuid.UUID
-    processor_type: str = Field(..., description="e.g., document_ocr, speech_transcription")
+    processor_type: ProcessorType
     parameters: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -43,3 +43,16 @@ class ProcessingRunResponse(BaseModel):
     started_at: datetime.datetime | None
     completed_at: datetime.datetime | None
     failure_reason: str | None
+
+
+class DocumentResultsResponse(BaseModel):
+    """Actual persisted source evidence and unverified extraction, scoped to a document."""
+
+    evidence_id: uuid.UUID
+    case_id: uuid.UUID
+    status: str
+    ocr_run: ProcessingRunResponse | None = None
+    extraction_run: ProcessingRunResponse | None = None
+    pages: list[dict[str, Any]] = Field(default_factory=list)
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
+    needs_human_verification: bool = True

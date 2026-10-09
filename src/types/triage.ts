@@ -102,8 +102,8 @@ export interface Patient {
   id: string; // Synthetic ID e.g. P-1042
   syntheticCode: string; // e.g. SYN-2026-001
   name: string;
-  age: number;
-  gender: 'Female' | 'Male' | 'Other';
+  age: number | null;
+  gender: 'Female' | 'Male' | 'Other' | null;
   primaryLanguage: string; // e.g. 'Odia (ଓଡ଼ିଆ)', 'Hindi (हिन्दी)'
   translatedToEnglish: boolean;
   contactMasked: string; // e.g. '+91 98*** **412'

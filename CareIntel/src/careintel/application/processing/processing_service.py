@@ -96,9 +96,9 @@ class ProcessingService:
             case_id=evidence.case_id,
             actor_id=user.id,
             payload={
+                **command.parameters,
                 "processor_type": command.processor_type,
                 "config_version": command.parameters.get("config_version", "v1"),
-                **command.parameters,
             },
         )
         await self.outbox_repo.append(outbox_event)
@@ -133,6 +133,16 @@ class ProcessingService:
             causation_id=outbox_event.id,
         )
 
+        self.logger.info(
+            "Document processing task queued",
+            extra={
+                "document_id": str(evidence.id),
+                "case_id": str(evidence.case_id),
+                "task_id": str(task.id),
+                "status": task.status.value,
+                "correlation_id": correlation_id,
+            },
+        )
         return task.id
 
     @staticmethod
@@ -274,3 +284,95 @@ class ProcessingService:
             raise NotFoundError("Processing run not found.")
         await self.access_guard.require_readable_evidence(run.evidence_id, user)
         return self._to_domain(run)
+
+    async def get_document_results(
+        self, evidence_id: uuid.UUID, user: UserContext
+    ) -> dict[str, Any]:
+        """Return one document's latest OCR and its linked extraction; never mix attempts."""
+        evidence = await self.access_guard.require_readable_evidence(evidence_id, user)
+        runs = await self.processing_repo.list_runs_for_evidence(evidence_id)
+        ocr = next((r for r in runs if r.processor_type == ProcessorType.DOCUMENT_OCR.value), None)
+        response: dict[str, Any] = {
+            "evidence_id": evidence.id,
+            "case_id": evidence.case_id,
+            "status": "NOT_STARTED",
+            "pages": [],
+            "candidates": [],
+            "needs_human_verification": True,
+        }
+        if evidence.state != "READY":
+            response["status"] = "AWAITING_SCAN" if evidence.state == "STORED" else evidence.state
+            return response
+        if ocr is None:
+            return response
+        response["ocr_run"] = self._to_domain(ocr)
+        response["status"] = ocr.status
+        if ocr.provider == "demo":
+            response["status"] = "DEMO_UNVERIFIED"
+            return response
+        if ocr.status != ProcessingStatus.COMPLETED.value:
+            if ocr.failure_reason == "NO_EXTRACTABLE_CONTENT":
+                response["status"] = "NO_EXTRACTABLE_CONTENT"
+            return response
+        for page in await self.processing_repo.get_ocr_pages_for_run(ocr.id):
+            response["pages"].append(
+                {
+                    "page_id": str(page.id),
+                    "page_number": page.page_number,
+                    "width": page.width,
+                    "height": page.height,
+                    "unit": page.unit,
+                    "status": page.status,
+                    "regions": [
+                        {
+                            "region_id": str(r.id),
+                            "text": r.text_content,
+                            "bounding_box": r.bounding_box,
+                            "confidence": r.confidence,
+                        }
+                        for r in await self.processing_repo.get_ocr_regions_for_page(page.id)
+                    ],
+                }
+            )
+        response["pages"].sort(key=lambda p: p["page_number"])
+        response["status"] = "OCR_COMPLETED"
+        for run in runs:
+            if run.processor_type != ProcessorType.CANDIDATE_EXTRACTION.value:
+                continue
+            extraction = await self.processing_repo.get_extraction_run_for_processing(run.id)
+            # A failed attempt may have no artifact; its config still binds the source run.
+            linked = extraction is not None and extraction.source_processing_run_id == ocr.id
+            linked = linked or run.config_version.endswith(f":{ocr.id}")
+            if not linked:
+                continue
+            response["extraction_run"] = self._to_domain(run)
+            if run.provider == "demo":
+                response["status"] = "DEMO_UNVERIFIED"
+            elif run.status != ProcessingStatus.COMPLETED.value:
+                response["status"] = run.status
+            elif extraction is not None:
+                response["candidates"] = [
+                    {
+                        "candidate_id": str(c.id),
+                        "field_type": c.field_type,
+                        "value": c.value,
+                        "normalized_value": c.normalized_value,
+                        "confidence": c.confidence,
+                        "status": c.status,
+                        "provenance": c.provenance_json,
+                    }
+                    for c in await self.processing_repo.get_candidates_for_extraction(extraction.id)
+                ]
+                # A conservative extractor cannot assert that every clinical field was read.
+                response["status"] = "PARTIAL" if response["candidates"] else "NO_SUPPORTED_FIELDS"
+            break
+        self.logger.info(
+            "Document results read",
+            extra={
+                "document_id": str(evidence.id),
+                "case_id": str(evidence.case_id),
+                "run_id": str(ocr.id),
+                "status": response["status"],
+            },
+        )
+        return response

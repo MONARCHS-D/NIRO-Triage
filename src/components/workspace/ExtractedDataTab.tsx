@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useTriage } from '../../context/TriageContext';
+import { ReportExtractStudio } from '../intake/ReportExtractStudio';
 
 interface ExtractedDataTabProps {
   patient: Patient;
@@ -40,21 +41,11 @@ export const ExtractedDataTab: React.FC<ExtractedDataTabProps> = ({ patient, wor
     setEditingFactId(null);
   };
 
-  // Flatten candidates from backend processing runs
-  const backendCandidates: Array<{
-    candidate_id: string;
-    field_type: string;
-    value: string;
-    status: string;
-    provenance?: any;
-  }> = [];
+  if (patient.caseId) {
+    return <ReportExtractStudio key={patient.caseId} caseId={patient.caseId} />;
+  }
 
-  const processingRuns: any[] = workspaceData?.derived_information?.processing || [];
-  processingRuns.forEach((run) => {
-    if (Array.isArray(run.extracted_candidates)) {
-      backendCandidates.push(...run.extracted_candidates);
-    }
-  });
+  const backendCandidates: Array<{candidate_id: string; field_type: string; value: string; status: string}> = [];
 
   return (
     <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-6">
@@ -67,7 +58,7 @@ export const ExtractedDataTab: React.FC<ExtractedDataTabProps> = ({ patient, wor
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold px-2.5 py-1 rounded bg-blue-50 text-[#164FD6] border border-blue-200">
-            {patient.facts.length} Verified Facts
+            {patient.facts.length} Extracted Facts — Unverified
           </span>
           {backendCandidates.length > 0 && (
             <span className="text-xs font-semibold px-2.5 py-1 rounded bg-purple-50 text-purple-700 border border-purple-200">

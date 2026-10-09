@@ -258,7 +258,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                       {/* Age / Sex */}
                       <td className="py-3.5 px-4 text-[#25364A] whitespace-nowrap tabular-nums">
-                        {patient.age}y / {patient.gender[0]}
+                        {patient.age ?? 'Not provided'}y / {patient.gender?.[0] ?? 'Not provided'}
                       </td>
 
                       {/* Chief Complaint */}

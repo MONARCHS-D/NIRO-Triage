@@ -177,7 +177,7 @@ export const BackendHealthBadge: React.FC = () => {
 
               {status !== 'ONLINE' && (
                 <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800 mt-2">
-                  <span>Backend unreachable at <code>{API_BASE_URL}</code>. The app is seamlessly using resilient offline synthetic storage.</span>
+                  <span>Backend unreachable at <code>{API_BASE_URL}</code>. Document evidence is unavailable until the backend reconnects.</span>
                 </div>
               )}
             </div>

@@ -5,6 +5,7 @@ import { Facility, UserProfile, UserRole } from '../types/roles';
 import { INITIAL_FACILITIES, INITIAL_USERS } from '../lib/syntheticData';
 import { authApi } from '../lib/api/auth';
 import { getAuthToken, setAuthToken } from '../lib/api/client';
+import { DEMO_MODE } from '../lib/api/config';
 
 interface RoleContextType {
   currentUser: UserProfile;
@@ -14,6 +15,7 @@ interface RoleContextType {
   viewMode: 'REVIEWER_DESKTOP' | 'PATIENT_MOBILE';
   isOffline: boolean;
   isAuthenticated: boolean;
+  isAuthLoading: boolean;
   isSessionExpired: boolean;
   setCurrentUser: (user: UserProfile) => void;
   setCurrentFacility: (facility: Facility) => void;
@@ -30,25 +32,21 @@ const RoleContext = createContext<RoleContextType | undefined>(undefined);
 const AUTH_STORAGE_KEY = 'niro_auth_state_v1';
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<UserProfile>(INITIAL_USERS[0]);
+  const [currentUser, setCurrentUser] = useState<UserProfile>(DEMO_MODE ? INITIAL_USERS[0] : { ...INITIAL_USERS[0], id: '', name: 'Authenticated user', title: 'Staff', registrationNumber: undefined });
   const [currentFacility, setCurrentFacility] = useState<Facility>(INITIAL_FACILITIES[0]);
   const [facilities] = useState<Facility[]>(INITIAL_FACILITIES);
   const [users] = useState<UserProfile[]>(INITIAL_USERS);
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
   const [isOffline, setIsOffline] = useState<boolean>(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      return stored !== 'false';
-    }
-    return true;
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(DEMO_MODE);
+  const [isAuthLoading, setIsAuthLoading] = useState(!DEMO_MODE);
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
 
   const setUserRole = useCallback((role: UserRole) => {
     const matched = users.find((u) => u.role === role);
     if (matched) {
-      setCurrentUser(matched);
+      if (DEMO_MODE) setCurrentUser(matched);
+      else setCurrentUser(prev => ({...prev, role, title: role.replaceAll('_', ' ')}));
       if (role === 'PATIENT') {
         setViewMode('PATIENT_MOBILE');
       } else if (viewMode === 'PATIENT_MOBILE') {
@@ -78,24 +76,19 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
             }));
           }
         } catch (e: any) {
-          console.warn('Backend session verification failed, falling back to local storage:', e);
+          console.warn('Backend session verification failed.');
           if (e?.code === 'NETWORK_ERROR') {
             setIsOffline(true);
           }
-          const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-          if (stored === 'true') {
-            setIsAuthenticated(true);
-          }
+          setIsAuthenticated(DEMO_MODE);
         }
       } else {
-        const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-        if (stored === 'true') {
-          setIsAuthenticated(true);
-        }
+        setIsAuthenticated(DEMO_MODE);
       }
+      setIsAuthLoading(false);
     };
 
-    initAuth();
+    void initAuth();
 
     // Session expiration listener
     const handleSessionExpired = () => {
@@ -134,7 +127,8 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         // Non-fatal
       }
     } catch (e: any) {
-      console.warn('Backend login endpoint unavailable or rejected, using prototype mode:', e);
+      if (!DEMO_MODE) { setIsAuthenticated(false); return false; }
+      console.warn('Explicit demo mode login.');
       if (e?.code === 'NETWORK_ERROR') {
         setIsOffline(true);
       }
@@ -185,6 +179,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         viewMode,
         isOffline,
         isAuthenticated,
+        isAuthLoading,
         isSessionExpired,
         setCurrentUser,
         setCurrentFacility,

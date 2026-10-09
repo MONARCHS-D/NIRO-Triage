@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { Button } from '../common/Button';
 import { VoiceIntakeStudio } from '../intake/VoiceIntakeStudio';
-import { ReportExtractStudio } from '../intake/ReportExtractStudio';
 import { ConsentModal } from '../common/ConsentModal';
 import { useTriage } from '../../context/TriageContext';
 import { useRole } from '../../context/RoleContext';
@@ -29,6 +28,7 @@ import { evidenceApi } from '../../lib/api/evidence';
 import { processingApi } from '../../lib/api/processing';
 import { structuringApi } from '../../lib/api/structuring';
 import { reviewApi } from '../../lib/api/review';
+import { DEMO_MODE } from '../../lib/api/config';
 
 interface NewIntakeViewProps {
   onIntakeCompleted: (patientId: string) => void;
@@ -40,7 +40,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
   onCancel,
 }) => {
   const { addPatient, addOutboxItem } = useTriage();
-  const { currentFacility, isOffline } = useRole();
+  const { currentFacility, currentUser, isOffline } = useRole();
   const { notifyArrival } = useNotifications();
 
   // Stepper: 1 Patient Info -> 2 Input Details -> 3 Review
@@ -48,17 +48,17 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
   const [selectedChannel, setSelectedChannel] = useState<'VOICE' | 'TYPE' | 'REPORT' | 'PHOTO'>('VOICE');
 
   // Step 1 State: Patient Info
-  const [name, setName] = useState('Kamala Barik');
-  const [age, setAge] = useState('38');
+  const [name, setName] = useState('');
+  const [age, setAge] = useState('');
   const [gender, setGender] = useState<'Female' | 'Male' | 'Other'>('Female');
   const [primaryLanguage, setPrimaryLanguage] = useState<string>('Odia (ଓଡ଼ିଆ)');
-  const [contact, setContact] = useState('+91 94371 28912');
+  const [contact, setContact] = useState('');
   const [consentGranted, setConsentGranted] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
 
   // Step 2 State: Multimodal Input
   const [typedComplaint, setTypedComplaint] = useState(
-    'Severe bilateral knee pain and swelling for 4 days, difficulty bearing weight in the morning.'
+    ''
   );
   const [capturedVoiceData, setCapturedVoiceData] = useState<{
     language: string;
@@ -67,6 +67,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
     symptoms: Symptom[];
   } | null>(null);
   const [extractedFacts, setExtractedFacts] = useState<ExtractedFact[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handleNextFromStep1 = () => {
@@ -78,6 +79,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
   };
 
   const handleFinalSubmit = async () => {
+    setSubmitError(null);
     setIsSubmitting(true);
     const newId = `P-${Math.floor(1000 + Math.random() * 9000)}`;
     const syntheticCode = `SYN-2026-${Math.floor(100 + Math.random() * 900)}`;
@@ -128,26 +130,16 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
         console.warn('Backend review queue entry note:', qErr);
       }
     } catch (e) {
-      console.warn('Backend API intake pipeline bypassed with local fallback:', e);
+      if (!DEMO_MODE) {
+        setSubmitError('Intake could not be registered. Check the registered subject, session, and required consent.');
+        return;
+      }
+      console.warn('Intake retained in explicit demo mode.');
     } finally {
       setIsSubmitting(false);
     }
 
-    let symptomsList: Symptom[] = [];
-    if (capturedVoiceData && capturedVoiceData.symptoms.length > 0) {
-      symptomsList = capturedVoiceData.symptoms;
-    } else {
-      symptomsList = [
-        {
-          id: `sym-new-1`,
-          name: typedComplaint.substring(0, 40),
-          duration: '4 days',
-          severity: 'MODERATE',
-          source: selectedChannel === 'VOICE' ? 'VOICE' : 'MANUAL',
-          confidence: 0.95,
-        },
-      ];
-    }
+    const symptomsList: Symptom[] = capturedVoiceData?.symptoms || [];
 
     const newPatient: Patient = {
       id: newId,
@@ -155,7 +147,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
       version: backendVersion,
       syntheticCode,
       name,
-      age: parseInt(age) || 35,
+      age: age.trim() ? Number(age) : null,
       gender,
       primaryLanguage: capturedVoiceData?.language || primaryLanguage || 'Odia (ଓଡ଼ିଆ)',
       translatedToEnglish: true,
@@ -165,35 +157,11 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
       chiefComplaint: typedComplaint || capturedVoiceData?.translation || 'General symptoms at triage',
       symptoms: symptomsList,
       relevantHistory: ['Recorded during CHC intake session', 'Consent obtained and verified'],
-      vitals: {
-        bloodPressure: '122/80 mmHg',
-        pulseRate: '82 bpm',
-        temperature: '98.8 °F',
-        spO2: '97%',
-        respiratoryRate: '18 breaths/min',
-      },
+      vitals: {},
       facts: extractedFacts,
-      missingInfo: [
-        {
-          id: `miss-new-1`,
-          field: 'duration_onset',
-          label: 'Exact onset of acute flare',
-          category: 'SYMPTOM_DETAIL',
-          status: 'NOT_PROVIDED',
-          reason: 'Clarify if morning stiffness lasts > 30 minutes.',
-          askPrompt: 'Does the joint stiffness last longer than 30 minutes after waking up?',
-          quickOptions: ['Yes, > 30 mins', 'No, improves quickly', 'Constant stiffness'],
-        },
-      ],
+      missingInfo: [],
       riskFlags: [],
-      aiQuestions: [
-        {
-          id: `q-new-1`,
-          missingInfoId: `miss-new-1`,
-          questionText: 'Does the joint stiffness last longer than 30 minutes after waking up in the morning?',
-          options: ['Yes, > 30 mins', 'No, improves quickly', 'Constant stiffness', 'Not sure'],
-        },
-      ],
+      aiQuestions: [],
       timeline: [
         {
           id: `tl-new-1`,
@@ -201,15 +169,15 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
           title: 'Patient Intake Completed',
           description: `Intake recorded via ${selectedChannel} channel.`,
           source: selectedChannel === 'VOICE' ? 'VOICE' : 'REPORT',
-          actor: 'CHO Ramesh Sahoo',
+          actor: currentUser.name,
         },
       ],
       auditLog: [
         {
           id: `aud-new-1`,
           timestamp: 'Just now',
-          actor: 'CHO Ramesh Sahoo',
-          actorRole: 'Community Health Officer',
+          actor: currentUser.name,
+          actorRole: currentUser.title,
           action: 'REGISTER_NEW_INTAKE',
           objectAffected: newId,
           details: `Registered ${name} (${gender}/${age}) with ${selectedChannel} input`,
@@ -248,6 +216,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {submitError && <p role="alert" className="text-sm text-red-800">{submitError}</p>}
       {/* Stepper Header (Section 7) */}
       <div className="bg-white rounded-xl border border-[#E6ECF2] p-4 sm:p-6 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -560,12 +529,10 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
           )}
 
           {selectedChannel === 'REPORT' && (
-            <ReportExtractStudio
-              onFactsExtracted={(f) => {
-                setExtractedFacts(f);
-                setCurrentStep(3);
-              }}
-            />
+            <div className="text-sm space-y-2">
+              <p>Document uploads require a registered case with active consent.</p>
+              <a href="/intake/report" className="text-blue-700 underline">Open document intake and select the registered case</a>
+            </div>
           )}
 
           {selectedChannel === 'TYPE' && (

@@ -210,6 +210,9 @@ export interface ProcessingRunResponse {
   run_id: string;
   evidence_id: string;
   processor_type: string;
+  provider: string;
+  config_version: string;
+  failure_reason: string | null;
   status: string;
   created_at?: string;
   started_at?: string | null;
@@ -580,3 +583,32 @@ export interface EncounterListResponse {
   encounters: EncounterResponse[];
 }
 
+
+export interface DocumentCandidate {
+  candidate_id: string;
+  field_type: string;
+  value: string;
+  normalized_value: string | null;
+  confidence: number | null;
+  status: string;
+  provenance: Array<{
+    evidence_id: string; page_number: number | null; region_id: string | null;
+    span_start: number | null; span_end: number | null; raw_source_text: string | null;
+    source_unit?: string | null; reference_interval?: string | null; source_flag?: string | null; comparison?: string | null;
+  }>;
+}
+
+export interface DocumentResultsResponse {
+  evidence_id: string;
+  case_id: string;
+  status: string;
+  ocr_run: ProcessingRunResponse | null;
+  extraction_run: ProcessingRunResponse | null;
+  needs_human_verification: boolean;
+  pages: Array<{
+    page_id: string; page_number: number; width: number | null; height: number | null;
+    unit: string | null; status: string;
+    regions: Array<{ region_id: string; text: string; bounding_box: number[] | null; confidence: number | null }>;
+  }>;
+  candidates: DocumentCandidate[];
+}

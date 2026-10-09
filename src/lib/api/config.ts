@@ -11,3 +11,6 @@ export const USER_PROFILE_STORAGE_KEY = 'careintel_user_profile_v1';
 export const DEFAULT_TIMEOUT_MS = 30000;
 export const DEFAULT_POLL_INTERVAL_MS = 2000;
 export const MAX_POLL_ATTEMPTS = 30;
+
+// Fixtures are opt-in and are never a fallback for backend errors.
+export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';

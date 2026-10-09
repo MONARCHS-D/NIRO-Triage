@@ -3,7 +3,7 @@ Unit tests for ExtractionProcessor.
 """
 
 import uuid
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import SecretStr
@@ -42,12 +42,18 @@ def evidence() -> EvidenceORM:
 
 @pytest.fixture
 def mocks() -> dict[str, AsyncMock]:
-    return {
+    result = {
         "access_guard": AsyncMock(),
         "processing_repo": AsyncMock(),
         "outbox_repo": AsyncMock(),
         "extraction_provider": AsyncMock(),
     }
+
+    result["processing_repo"].session = MagicMock()
+    result["processing_repo"].session.flush = AsyncMock()
+    result["processing_repo"].session.begin_nested.return_value = AsyncMock()
+    result["processing_repo"].session.begin_nested.return_value.__aexit__.return_value = False
+    return result
 
 
 @pytest.fixture
@@ -84,6 +90,7 @@ async def test_process_success(
             "id": source_run_id,
             "evidence_id": evidence.id,
             "status": ProcessingStatus.COMPLETED.value,
+            "processor_type": "language_normalization",
         },
     )()
 

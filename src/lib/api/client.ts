@@ -97,6 +97,7 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
 
   try {
     const response = await fetch(url.toString(), {
+      cache: "no-store",
       ...fetchOptions,
       headers,
       body: requestBody,

@@ -20,6 +20,7 @@ from careintel.domain.evidence.modality import EvidenceModality
 from careintel.domain.evidence.states import EvidenceState
 from careintel.domain.processing.processing_status import ProcessingStatus
 from careintel.infrastructure.ocr.port import OcrResult
+from careintel.domain.processing.processing_models import OcrPage, OcrRegion
 from careintel.persistence.models.evidence import EvidenceORM
 from careintel.persistence.models.processing import ProcessingRunORM
 
@@ -51,13 +52,18 @@ def evidence() -> EvidenceORM:
 
 @pytest.fixture
 def mocks() -> dict[str, AsyncMock]:
-    return {
+    result = {
         "access_guard": AsyncMock(),
         "processing_repo": AsyncMock(),
         "outbox_repo": AsyncMock(),
         "blob_storage": AsyncMock(),
         "ocr_provider": AsyncMock(),
     }
+
+    result["processing_repo"].session = MagicMock()
+    result["processing_repo"].session.begin_nested.return_value = AsyncMock()
+    result["processing_repo"].session.begin_nested.return_value.__aexit__.return_value = False
+    return result
 
 
 @pytest.fixture
@@ -93,8 +99,15 @@ async def test_process_success(
         yield b"fake pdf data"
 
     mocks["blob_storage"].download = MagicMock(return_value=async_generator())
-    mocks["ocr_provider"].process_document.return_value = OcrResult(
-        pages=[], regions=[], provider_version="test"
+    page_id = uuid.uuid4()
+    mocks["ocr_provider"].process_document.side_effect = lambda path, run_id: OcrResult(
+        pages=[OcrPage(page_id=page_id, run_id=uuid.UUID(run_id), page_number=1)],
+        regions=[
+            OcrRegion(
+                region_id=uuid.uuid4(), page_id=page_id, text="Source evidence", reading_order=1
+            )
+        ],
+        provider_version="test",
     )
 
     run_id = await processor.process(evidence.id, user, "corr-1")
@@ -183,3 +196,38 @@ async def test_process_ocr_failure(
     assert added_run.status == ProcessingStatus.FAILED.value
     assert added_run.failure_reason == "Exception"
     mocks["outbox_repo"].append.assert_called_once()
+
+
+async def test_empty_ocr_is_not_completed(processor, mocks, evidence, user):
+    mocks["access_guard"].require_ready_evidence.return_value = evidence
+    mocks["processing_repo"].get_run_by_idempotency_key.return_value = None
+
+    async def stream():
+        yield b"synthetic pdf"
+
+    mocks["blob_storage"].download = MagicMock(side_effect=lambda key: stream())
+    mocks["ocr_provider"].process_document.return_value = OcrResult([], [], "test")
+    await processor.process(evidence.id, user, "empty-ocr")
+    run = mocks["processing_repo"].add_run.call_args.args[0]
+    assert run.status == "FAILED"
+    assert run.failure_reason == "NO_EXTRACTABLE_CONTENT"
+
+
+async def test_failed_run_can_retry_without_overwriting_success(processor, mocks, evidence, user):
+    mocks["access_guard"].require_ready_evidence.return_value = evidence
+    run = ProcessingRunORM(id=uuid.uuid4(), evidence_id=evidence.id, status="FAILED")
+    mocks["processing_repo"].get_run_by_idempotency_key.return_value = run
+
+    async def stream():
+        yield b"synthetic pdf"
+
+    mocks["blob_storage"].download = MagicMock(side_effect=lambda key: stream())
+    page_id = uuid.uuid4()
+    mocks["ocr_provider"].process_document.return_value = OcrResult(
+        [OcrPage(page_id, run.id, 1)], [OcrRegion(uuid.uuid4(), page_id, "Real text", 1)], "test"
+    )
+    assert await processor.process(evidence.id, user, "retry") == run.id
+    assert run.status == "COMPLETED"
+    mocks["processing_repo"].add_run.assert_not_called()
+    assert await processor.process(evidence.id, user, "repeat") == run.id
+    assert mocks["ocr_provider"].process_document.await_count == 1

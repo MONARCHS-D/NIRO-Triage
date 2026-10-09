@@ -1,5 +1,6 @@
 'use client';
 
+import { DEMO_MODE } from '../lib/api/config';
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Priority } from '../types/triage';
 import {
@@ -226,7 +227,7 @@ function playTriageChime(isUrgent: boolean = false) {
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<TriageNotification[]>(() => {
-    if (typeof window !== 'undefined') {
+    if (DEMO_MODE && typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
         if (saved) return JSON.parse(saved);
@@ -234,7 +235,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.error('Failed to load notifications:', e);
       }
     }
-    return INITIAL_NOTIFICATIONS;
+    return DEMO_MODE ? INITIAL_NOTIFICATIONS : [];
   });
 
   const [toasts, setToasts] = useState<ArrivalToast[]>([]);
@@ -254,7 +255,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications));
+        if (DEMO_MODE) localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications));
       } catch (e) {
         console.error('Failed to persist notifications:', e);
       }
@@ -381,6 +382,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const simulateIncomingArrival = useCallback(
     (presetPriority?: Priority, simulatedType?: NotificationType) => {
+      if (!DEMO_MODE) return;
       if (simulatedType === 'AI_EVALUATION_READY') {
         const id = `P-${Math.floor(1040 + Math.random() * 40)}`;
         addNotification({

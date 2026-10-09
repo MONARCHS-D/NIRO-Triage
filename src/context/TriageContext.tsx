@@ -8,6 +8,7 @@ import { reviewApi } from '../lib/api/review';
 import { escalationApi } from '../lib/api/escalation';
 import { caseApi } from '../lib/api/cases';
 import { ApiError } from '../lib/api/errors';
+import { DEMO_MODE } from '../lib/api/config';
 
 export interface OutboxRecord {
   id: string;
@@ -51,12 +52,12 @@ interface TriageContextType {
 
 const TriageContext = createContext<TriageContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'niro_triage_patients_v1';
+const STORAGE_KEY = 'careintel_demo_patients_v2';
 
 export function TriageProvider({ children }: { children: React.ReactNode }) {
-  const { currentUser, currentFacility } = useRole();
+  const { currentUser, currentFacility, isAuthenticated } = useRole();
   const [patients, setPatients] = useState<Patient[]>(() => {
-    if (typeof window !== 'undefined') {
+    if (DEMO_MODE && typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
@@ -66,10 +67,10 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         console.error('Failed to load patients from local storage:', e);
       }
     }
-    return INITIAL_PATIENTS;
+    return DEMO_MODE ? INITIAL_PATIENTS : [];
   });
 
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('P-1042');
+  const [selectedPatientId, setSelectedPatientId] = useState<string>(DEMO_MODE ? 'P-1042' : '');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'RED' | 'YELLOW' | 'GREEN'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -137,7 +138,7 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
+        if (DEMO_MODE) localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
       } catch (e) {
         console.error('Failed to save patients to local storage:', e);
       }
@@ -145,15 +146,16 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
   }, [patients]);
 
   const refreshCases = useCallback(async () => {
+    if (DEMO_MODE) return;
+    if (!isAuthenticated) { setPatients([]); return; }
     setIsSyncing(true);
     setSyncError(null);
     try {
       // Query review queue from backend
       const queueResponse = await reviewApi.listQueue();
-      if (Array.isArray(queueResponse) && queueResponse.length > 0) {
-        console.info('Retrieved review queue from CareIntel backend:', queueResponse);
+      if (Array.isArray(queueResponse)) {
         setPatients((prev) => {
-          const updated = [...prev];
+          const updated = prev.filter(p => p.caseId && queueResponse.some(item => item.case_id === p.caseId));
           queueResponse.forEach((item) => {
             const existingIdx = updated.findIndex((p) => p.caseId === item.case_id);
             const priorityMapped: Priority =
@@ -161,7 +163,7 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
                 ? 'RED'
                 : item.priority_bucket?.toUpperCase() === 'GREEN'
                 ? 'GREEN'
-                : 'YELLOW';
+                : item.priority_bucket?.toUpperCase() === 'YELLOW' ? 'YELLOW' : 'GREY';
             const statusMapped: CaseStatus =
               item.status === 'REVIEW_COMPLETE'
                 ? 'APPROVED'
@@ -184,22 +186,17 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
                 caseId: item.case_id,
                 syntheticCode: `SYN-${shortId.toUpperCase()}`,
                 name: `Referred Patient (${shortId.substring(0, 4)})`,
-                age: 38,
-                gender: 'Female',
-                primaryLanguage: 'Odia (ଓଡ଼ିଆ)',
-                translatedToEnglish: true,
-                contactMasked: '+91 98*** **412',
+                age: null,
+                gender: null,
+                primaryLanguage: 'Not provided',
+                translatedToEnglish: false,
+                contactMasked: 'Not provided',
                 visitId: `VST-2026-${shortId.substring(0, 4)}`,
                 arrivalTime: 'Today · Active Queue',
                 chiefComplaint: 'Clinical case admitted for structured review and prioritization',
                 symptoms: [],
                 relevantHistory: ['Intake registered in CareIntel review queue'],
-                vitals: {
-                  bloodPressure: '120/80 mmHg',
-                  pulseRate: '84 bpm',
-                  temperature: '98.6 °F',
-                  spO2: '96%',
-                },
+                vitals: {},
                 facts: [],
                 missingInfo: [],
                 riskFlags: [],
@@ -237,23 +234,24 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         });
       }
     } catch (e: any) {
-      // Non-fatal, fallback to local store
+      setPatients([]);
+      setSyncError('Unable to load the authorized case queue.');
       if (e instanceof ApiError && e.code !== 'UNAUTHORIZED') {
         console.warn('Backend sync note:', e.message);
       }
     } finally {
       setIsSyncing(false);
     }
-  }, [currentFacility?.id]);
+  }, [currentFacility?.id, isAuthenticated]);
 
   // Initial load: refresh live review queue from backend
   useEffect(() => {
     refreshCases();
   }, [refreshCases]);
 
-  const selectedPatient = patients.find((p) => p.id === selectedPatientId) || patients[0] || null;
+  const selectedPatient = patients.find((p) => p.id === selectedPatientId) || null;
 
-  const updatePatient = (id: string, updates: Partial<Patient>) => {
+  const updatePatient = useCallback((id: string, updates: Partial<Patient>) => {
     setPatients((prev) =>
       prev.map((patient) => {
         if (patient.id === id) {
@@ -262,7 +260,7 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
         return patient;
       })
     );
-  };
+  }, []);
 
   const addPatient = (patient: Patient) => {
     setPatients((prev) => [patient, ...prev]);
@@ -629,8 +627,8 @@ export function TriageProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetToDefaults = () => {
-    setPatients(INITIAL_PATIENTS);
-    setSelectedPatientId('P-1042');
+    setPatients(DEMO_MODE ? INITIAL_PATIENTS : []);
+    setSelectedPatientId(DEMO_MODE ? 'P-1042' : '');
     setSyncError(null);
     setOutbox([]);
     if (typeof window !== 'undefined') {

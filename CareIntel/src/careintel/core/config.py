@@ -229,6 +229,10 @@ class Settings(BaseSettings):
         default="prebuilt-layout",
         description="Azure Document Intelligence model (prebuilt-layout, prebuilt-read)",
     )
+    azure_di_api_version: str = "2024-11-30"
+    ocr_timeout_seconds: int = Field(default=240, gt=0)
+    content_scanner_provider: str = "clamav"
+    content_scanner_timeout_seconds: int = Field(default=120, gt=0)
 
     llm_provider: str = Field(default="demo", description="LLM provider: demo, azure_openai")
     llm_timeout_seconds: int = Field(
@@ -274,8 +278,8 @@ class Settings(BaseSettings):
     )
 
     extraction_provider: str = Field(
-        default="demo",
-        description="Extraction provider: demo, gpt",
+        default="lab_rules",
+        description="Extraction provider: lab_rules (source-only), demo (non-production only)",
     )
 
     # ── Async Execution & Celery (Phase 8 & 12) ────────
@@ -353,6 +357,8 @@ class Settings(BaseSettings):
             return self
 
         invalid: list[str] = []
+        if self.extraction_provider != "lab_rules":
+            invalid.append("EXTRACTION_PROVIDER")
         if self.llm_provider != "azure_openai" or not self.azure_openai_api_key:
             invalid.append("LLM_PROVIDER")
         if self.embedding_provider != "azure_openai" or not self.azure_openai_api_key:

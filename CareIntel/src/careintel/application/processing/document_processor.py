@@ -8,7 +8,7 @@ from ulid import ULID
 
 from careintel.application.processing.access import ProcessingAccessGuard
 from careintel.core.config import Settings
-from careintel.core.errors import CareIntelError
+from careintel.core.errors import CareIntelError, ValidationError
 from careintel.domain.audit.events import AuditEventType
 from careintel.domain.auth.models import UserContext
 from careintel.domain.evidence.modality import EvidenceModality
@@ -60,18 +60,21 @@ class DocumentProcessor:
             raise CareIntelError(f"DocumentProcessor cannot handle modality: {evidence.modality}")
 
         # 4. Idempotency Check
-        config_version = "v1"  # Can be updated when pipelines change
+        config_version = (
+            f"v2:{self.settings.ocr_provider}:{self.settings.azure_di_model}:"
+            f"{self.settings.azure_di_api_version}"
+        )
         existing_run = await self.processing_repo.get_run_by_idempotency_key(
             evidence_id=evidence_id,
             processor_type=ProcessorType.DOCUMENT_OCR.value,
             config_version=config_version,
         )
-        if existing_run:
+        if existing_run and existing_run.status != ProcessingStatus.FAILED.value:
             return existing_run.id
 
         # 5. Create Run Record
-        run_id = uuid.uuid4()
-        run = ProcessingRunORM(
+        run_id = existing_run.id if existing_run else uuid.uuid4()
+        run = existing_run or ProcessingRunORM(
             id=run_id,
             evidence_id=evidence_id,
             processor_type=ProcessorType.DOCUMENT_OCR.value,
@@ -80,7 +83,10 @@ class DocumentProcessor:
             config_version=config_version,
             started_at=datetime.now(UTC).replace(tzinfo=None),
         )
-        await self.processing_repo.add_run(run)
+        if not existing_run:
+            await self.processing_repo.add_run(run)
+        run.failure_reason = None
+        run.completed_at = None
         run.status = ProcessingStatus.RUNNING.value
 
         # 6. Execute OCR in Temp Workspace
@@ -98,56 +104,74 @@ class DocumentProcessor:
                 async for chunk in self.blob_storage.download(evidence.storage_key):
                     f.write(chunk)
 
+            self.logger.info(
+                "OCR binary ready",
+                extra={
+                    "document_id": str(evidence_id),
+                    "case_id": str(evidence.case_id),
+                    "run_id": str(run_id),
+                    "status": run.status,
+                    "correlation_id": correlation_id,
+                },
+            )
             # OCR processing
             ocr_result = await self.ocr_provider.process_document(local_file_path, str(run_id))
 
-            # Persist output
-            for page in ocr_result.pages:
-                page_orm = OcrPageORM(
-                    id=page.page_id,
-                    run_id=run_id,
-                    page_number=page.page_number,
-                    width=page.width,
-                    height=page.height,
-                    unit=page.unit,
-                    confidence=page.confidence,
-                    status=page.status,
-                )
-                await self.processing_repo.add_ocr_page(page_orm)
-
-                regions_for_page = [r for r in ocr_result.regions if r.page_id == page.page_id]
-                region_orms = [
-                    OcrRegionORM(
-                        id=r.region_id,
-                        page_id=page.page_id,
-                        text_content=r.text,
-                        reading_order=r.reading_order,
-                        bounding_box=r.bounding_box,
-                        confidence=r.confidence,
+            if not ocr_result.pages or not any(r.text.strip() for r in ocr_result.regions):
+                raise ValidationError("No extractable document content.")
+            page_ids = {page.page_id for page in ocr_result.pages}
+            if any(r.page_id not in page_ids for r in ocr_result.regions):
+                raise ValidationError("OCR region page association is invalid.")
+            async with self.processing_repo.session.begin_nested():
+                # Persist output
+                for page in ocr_result.pages:
+                    page_orm = OcrPageORM(
+                        id=page.page_id,
+                        run_id=run_id,
+                        page_number=page.page_number,
+                        width=page.width,
+                        height=page.height,
+                        unit=page.unit,
+                        confidence=page.confidence,
+                        status=page.status,
                     )
-                    for r in regions_for_page
-                ]
-                await self.processing_repo.add_ocr_regions(region_orms)
+                    await self.processing_repo.add_ocr_page(page_orm)
 
-                tables_for_page = [
-                    table for table in ocr_result.tables if table.page_number == page.page_number
-                ]
-                await self.processing_repo.add_ocr_tables(
-                    [
-                        OcrTableCandidateORM(
-                            id=uuid.uuid4(),
+                    regions_for_page = [r for r in ocr_result.regions if r.page_id == page.page_id]
+                    region_orms = [
+                        OcrRegionORM(
+                            id=r.region_id,
                             page_id=page.page_id,
-                            cells_json={
-                                "row_count": table.row_count,
-                                "column_count": table.column_count,
-                                "cells": table.cells,
-                                "markdown": table.markdown,
-                            },
-                            confidence=None,
+                            text_content=r.text,
+                            reading_order=r.reading_order,
+                            bounding_box=r.bounding_box,
+                            confidence=r.confidence,
                         )
-                        for table in tables_for_page
+                        for r in regions_for_page
                     ]
-                )
+                    await self.processing_repo.add_ocr_regions(region_orms)
+
+                    tables_for_page = [
+                        table
+                        for table in ocr_result.tables
+                        if table.page_number == page.page_number
+                    ]
+                    await self.processing_repo.add_ocr_tables(
+                        [
+                            OcrTableCandidateORM(
+                                id=uuid.uuid4(),
+                                page_id=page.page_id,
+                                cells_json={
+                                    "row_count": table.row_count,
+                                    "column_count": table.column_count,
+                                    "cells": table.cells,
+                                    "markdown": table.markdown,
+                                },
+                                confidence=None,
+                            )
+                            for table in tables_for_page
+                        ]
+                    )
 
             run.status = ProcessingStatus.COMPLETED.value
             run.completed_at = datetime.now(UTC).replace(tzinfo=None)
@@ -158,13 +182,27 @@ class DocumentProcessor:
                 extra={"run_id": str(run_id), "error_type": type(exc).__name__},
             )
             run.status = ProcessingStatus.FAILED.value
-            run.failure_reason = type(exc).__name__
+            run.failure_reason = (
+                "NO_EXTRACTABLE_CONTENT"
+                if isinstance(exc, ValidationError) and "No extractable" in str(exc)
+                else type(exc).__name__
+            )
             run.completed_at = datetime.now(UTC).replace(tzinfo=None)
 
         finally:
             if os.path.exists(local_file_path):
                 os.remove(local_file_path)
 
+        self.logger.info(
+            "Document processing terminal state",
+            extra={
+                "document_id": str(evidence_id),
+                "case_id": str(evidence.case_id),
+                "run_id": str(run_id),
+                "status": run.status,
+                "correlation_id": correlation_id,
+            },
+        )
         # 7. Emit Outbox Event using Existing Infrastructure
         outbox_event = EvidenceOutboxORM(
             id=str(ULID()),
