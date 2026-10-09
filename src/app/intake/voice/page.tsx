@@ -8,12 +8,35 @@ import { useTriage } from '../../../context/TriageContext';
 import { useRole } from '../../../context/RoleContext';
 import { useNotifications } from '../../../context/NotificationContext';
 import { Patient } from '../../../types/triage';
+import { Button } from '../../../components/common/Button';
+import { ShieldAlert } from 'lucide-react';
 
 export default function VoiceIntakePage() {
   const router = useRouter();
   const { addPatient, setSelectedPatientId } = useTriage();
-  const { currentFacility, currentUser } = useRole();
+  const { currentFacility, currentUser, capabilities } = useRole();
   const { notifyArrival } = useNotifications();
+
+  if (capabilities.isSuspended || !capabilities.canPerformIntake) {
+    return (
+      <ShellLayout>
+        <div className="bg-white rounded-xl border border-[#E6ECF2] p-8 shadow-xs text-center space-y-4 max-w-lg mx-auto my-12 animate-in fade-in">
+          <div className="w-14 h-14 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200">
+            <ShieldAlert className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold text-[#102033]">Voice Intake Authority Suspended</h2>
+            <p className="text-xs text-[#526276] leading-relaxed">
+              Your practitioner account (<strong>{currentUser.name}</strong>) has been suspended by Facility Administration. You cannot record patient voice sessions or conduct triage intake.
+            </p>
+          </div>
+          <Button variant="secondary" size="md" onClick={() => router.push('/dashboard')}>
+            Return to Dashboard
+          </Button>
+        </div>
+      </ShellLayout>
+    );
+  }
 
   const handleVoiceComplete = (data: {
     language: string;

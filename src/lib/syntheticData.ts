@@ -49,6 +49,9 @@ export const INITIAL_USERS: UserProfile[] = [
     facility: 'City Community Health Center',
     department: 'General Medicine & Triage',
     registrationNumber: 'MCI-2015-84920',
+    email: 'doctor@careintel.local',
+    status: 'ACTIVE',
+    joinedDate: 'Jan 2024',
   },
   {
     id: 'user-2',
@@ -57,6 +60,10 @@ export const INITIAL_USERS: UserProfile[] = [
     title: 'Staff Nurse Grade-I',
     facility: 'City Community Health Center',
     department: 'Outpatient Triage',
+    registrationNumber: 'ONC-2018-49210',
+    email: 'nurse@careintel.local',
+    status: 'ACTIVE',
+    joinedDate: 'Mar 2024',
   },
   {
     id: 'user-3',
@@ -65,6 +72,10 @@ export const INITIAL_USERS: UserProfile[] = [
     title: 'Community Health Officer (CHO)',
     facility: 'City Community Health Center',
     department: 'Primary Health Services',
+    registrationNumber: 'CHO-2021-10492',
+    email: 'cho@careintel.local',
+    status: 'ACTIVE',
+    joinedDate: 'Jun 2024',
   },
   {
     id: 'user-4',
@@ -72,6 +83,9 @@ export const INITIAL_USERS: UserProfile[] = [
     role: 'PATIENT',
     title: 'Citizen',
     facility: 'City Community Health Center',
+    email: 'patient@careintel.local',
+    status: 'ACTIVE',
+    joinedDate: 'Sep 2026',
   },
   {
     id: 'user-5',
@@ -79,6 +93,10 @@ export const INITIAL_USERS: UserProfile[] = [
     role: 'ADMIN',
     title: 'Health Systems Administrator',
     facility: 'City Community Health Center',
+    department: 'Clinical Informatics & Operations',
+    email: 'admin@careintel.local',
+    status: 'ACTIVE',
+    joinedDate: 'Dec 2023',
   },
 ];
 

@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Staff Directory & Access Management Console (`src/components/views/SettingsView.tsx`)**:
+  - Centralized administrative console for Facility System Administrators (`ADMIN` role with `capabilities.canManageSettings` / `manage:users`).
+  - Real-time practitioner directory displaying professional registrations, departments, role assignments, and active/suspended access statuses.
+  - Live metric summary KPIs tracking Total Staff, Medical Officers, Triage Nurses, and Frontline CHOs.
+  - Full-text search by name, email, registration number, or department, combined with quick role filter pills.
+  - In-place clinical role reassignment with immediate permission synchronization.
+  - Practitioner status toggle (Active / Suspended) and credential revocation with strict self-lockout guards for the active session administrator.
+  - Dynamic local persistence via `careintel_staff_directory_v1` in `RoleContext.tsx`.
+- **Practitioner Provisioning Modal (`src/components/views/GrantAccessModal.tsx`)**:
+  - Modal form allowing facility administrators to provision and grant clinical authority to new Doctors, Nurses, CHOs, and Administrators.
+  - Input validation for legal name, official healthcare email, clinical department, statutory Medical Council Registration (MCI/State Council), and facility affiliation.
+- **Suspended Practitioner Clinical Lockdown & Login Guard (`src/context/RoleContext.tsx` & layout components)**:
+  - **Full Capability Lockdown**: When a practitioner is marked `status: 'SUSPENDED'`, all operational and clinical capabilities evaluate to `false` (`canApproveCase`, `canReferHandoff`, `canEscalateCase`, `canOverridePriority`, `canRunAi`, `canAcceptDraft`, `canManageSettings`, `canAccessDiagnostics`, `canPerformIntake`, `canViewReports`, `canAssignReview`).
+  - **Authentication / Login Blocker**: Suspended practitioners attempting to log in on `/auth/login` are strictly rejected with an explicit error: *"Account Suspended: Clinical credentials for {name} ({regNo}) have been deactivated by Facility Administration. Contact your Clinical Director."*
+  - **Global Workstation Banner**: Persistent top red warning banner rendered in `ShellLayout.tsx` alerting that the account is frozen in restricted read-only mode.
+  - **Dashboard Lockdown**: Prominently renders the red "Clinical Authority Suspended [LOCKED OUT]" alert card and disables "Start New Intake".
+  - **Intake Flow Locks**: Full-page lockdown screens in `NewIntakeView.tsx` and `VoiceIntakeStudio` completely blocking new case registrations or audio triage.
+  - **Patient Decision Gating**: All clinical mutation triggers ("Approve Note", "Escalate", "Run Advisory AI", "Accept draft ▾", "Refer / Handoff", "Edit") disabled across `SummaryTab.tsx` and `PatientHeader.tsx`.
+  - **Visual Indicator Synchronization**: Real-time status tags (`SUSPENDED` badge in Topbar, `Suspended · Access Revoked` in Sidebar profile card, and suspended credential banner in Settings).
+- **Authenticated Practitioner Credentials Security Card (`src/components/views/SettingsView.tsx`)**:
+  - Replaced prototype role-switcher buttons with a read-only, cryptographically verified credentials card under National Health Service / ABDM Clinical Governance.
+  - Displays authenticated practitioner name, official email, assigned clinical role badge, verified Medical Council Registration, department, facility posting, and active session indicator.
+  - Enforces institutional clinical governance prohibiting clinician self-assignment of privileges.
 - **Role-Based Access Control (RBAC) Engine (`src/types/roles.ts` & `src/context/RoleContext.tsx`)**:
   - Full domain alignment with Alembic migration `0015_seed_role_permissions.py`.
   - Type-safe `PermissionCode` union covering clinical use cases: `case:*`, `evidence:*`, `ai:*`, `review:*`, `escalation:*`, `referral:*`, `handoff:*`, `manage:*`.

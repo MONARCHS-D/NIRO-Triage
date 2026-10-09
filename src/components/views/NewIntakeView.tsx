@@ -23,6 +23,7 @@ import {
   FileCheck,
   Loader2,
   Sparkles,
+  ShieldAlert,
 } from 'lucide-react';
 import { consentApi } from '../../lib/api/consent';
 import { caseApi } from '../../lib/api/cases';
@@ -41,7 +42,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
   onCancel,
 }) => {
   const { addPatient, addOutboxItem } = useTriage();
-  const { currentFacility, isOffline } = useRole();
+  const { currentFacility, isOffline, capabilities, currentUser } = useRole();
   const { notifyArrival } = useNotifications();
 
   // Stepper: 1 Patient Info -> 2 Input Details -> 3 Review
@@ -254,6 +255,25 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
 
     onIntakeCompleted(newId);
   };
+
+  if (capabilities.isSuspended || !capabilities.canPerformIntake) {
+    return (
+      <div className="bg-white rounded-xl border border-[#E6ECF2] p-8 shadow-xs text-center space-y-4 max-w-lg mx-auto my-12 animate-in fade-in">
+        <div className="w-14 h-14 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-lg font-bold text-[#102033]">Clinical Intake Authority Suspended</h2>
+          <p className="text-xs text-[#526276] leading-relaxed">
+            Your practitioner account (<strong>{currentUser.name}</strong>) is currently suspended by Facility Administration. You cannot record patient vitals, capture multimodal symptoms, or initiate triage admissions.
+          </p>
+        </div>
+        <Button variant="secondary" size="md" onClick={onCancel}>
+          Return to Dashboard
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">

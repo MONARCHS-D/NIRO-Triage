@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Facility, PermissionCode, RoleCapabilities, UserProfile, UserRole } from '../types/roles';
+import { Facility, GrantAccessInput, PermissionCode, RoleCapabilities, UserProfile, UserRole } from '../types/roles';
 import { INITIAL_FACILITIES, INITIAL_USERS } from '../lib/syntheticData';
 import { authApi } from '../lib/api/auth';
 import { getAuthToken, setAuthToken } from '../lib/api/client';
@@ -104,6 +104,10 @@ interface RoleContextType {
   capabilities: RoleCapabilities;
   permissions: PermissionCode[];
   hasPermission: (perm: PermissionCode) => boolean;
+  grantStaffAccess: (input: GrantAccessInput) => UserProfile;
+  updateStaffRole: (userId: string, newRole: UserRole) => void;
+  toggleStaffStatus: (userId: string) => void;
+  deleteStaffMember: (userId: string) => void;
   setIsSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   setCurrentUser: (user: UserProfile) => void;
@@ -123,12 +127,49 @@ const AUTH_STORAGE_KEY = 'careintel_auth_state_v1';
 const LEGACY_AUTH_STORAGE_KEY = 'niro_auth_state_v1';
 const SIDEBAR_STORAGE_KEY = 'careintel_sidebar_collapsed';
 const LEGACY_SIDEBAR_STORAGE_KEY = 'niro_sidebar_collapsed';
+const STAFF_DIRECTORY_KEY = 'careintel_staff_directory_v1';
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<UserProfile>(INITIAL_USERS[0]);
-  const [currentFacility, setCurrentFacility] = useState<Facility>(INITIAL_FACILITIES[0]);
   const [facilities] = useState<Facility[]>(INITIAL_FACILITIES);
-  const [users] = useState<UserProfile[]>(INITIAL_USERS);
+  const [users, setUsers] = useState<UserProfile[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STAFF_DIRECTORY_KEY);
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch {
+          // ignore error
+        }
+      }
+    }
+    return INITIAL_USERS;
+  });
+  const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STAFF_DIRECTORY_KEY);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed[0];
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+    return INITIAL_USERS[0];
+  });
+
+  // Synchronize currentUser whenever users array updates (e.g. status suspension or role edit)
+  useEffect(() => {
+    const matched = users.find((u) => u.id === currentUser.id);
+    if (matched && (matched.status !== currentUser.status || matched.role !== currentUser.role)) {
+      setCurrentUser(matched);
+    }
+  }, [users, currentUser.id, currentUser.status, currentUser.role]);
+
+  const [currentFacility, setCurrentFacility] = useState<Facility>(INITIAL_FACILITIES[0]);
   const [viewMode, setViewMode] = useState<'REVIEWER_DESKTOP' | 'PATIENT_MOBILE'>('REVIEWER_DESKTOP');
   const [lastStaffRole, setLastStaffRole] = useState<UserRole>('DOCTOR');
   const [isOffline, setIsOffline] = useState<boolean>(false);
@@ -171,6 +212,98 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     }
   }, [users]);
 
+  // Admin Staff Provisioning & Management
+  const grantStaffAccess = useCallback((input: GrantAccessInput): UserProfile => {
+    const newId = `user-${Date.now().toString(36)}`;
+    const newUser: UserProfile = {
+      id: newId,
+      name: input.name,
+      role: input.role,
+      title: input.title,
+      facility: input.facility,
+      email: input.email,
+      department: input.department,
+      registrationNumber: input.registrationNumber,
+      status: 'ACTIVE',
+      joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      permissions: ROLE_PERMISSIONS[input.role] || [],
+    };
+
+    setUsers((prev) => {
+      const updated = [...prev, newUser];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STAFF_DIRECTORY_KEY, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    return newUser;
+  }, []);
+
+  const updateStaffRole = useCallback((userId: string, newRole: UserRole) => {
+    setUsers((prev) => {
+      const updated = prev.map((u) => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            role: newRole,
+            permissions: ROLE_PERMISSIONS[newRole] || [],
+          };
+        }
+        return u;
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STAFF_DIRECTORY_KEY, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    setCurrentUser((prev) => {
+      if (prev.id === userId) {
+        return {
+          ...prev,
+          role: newRole,
+          permissions: ROLE_PERMISSIONS[newRole] || [],
+        };
+      }
+      return prev;
+    });
+  }, []);
+
+  const toggleStaffStatus = useCallback((userId: string) => {
+    let nextStatus: 'ACTIVE' | 'SUSPENDED' = 'ACTIVE';
+    setUsers((prev) => {
+      const updated = prev.map((u) => {
+        if (u.id === userId) {
+          nextStatus = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+          return { ...u, status: nextStatus };
+        }
+        return u;
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STAFF_DIRECTORY_KEY, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    setCurrentUser((prev) => {
+      if (prev.id === userId) {
+        return { ...prev, status: nextStatus };
+      }
+      return prev;
+    });
+  }, []);
+
+  const deleteStaffMember = useCallback((userId: string) => {
+    setUsers((prev) => {
+      const updated = prev.filter((u) => u.id !== userId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STAFF_DIRECTORY_KEY, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  }, []);
+
   const exitPatientMobile = useCallback(() => {
     setViewMode('REVIEWER_DESKTOP');
     const targetRole = lastStaffRole && lastStaffRole !== 'PATIENT' ? lastStaffRole : 'DOCTOR';
@@ -181,6 +314,9 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   }, [lastStaffRole, users]);
 
   const permissions = useMemo<PermissionCode[]>(() => {
+    if (currentUser.status === 'SUSPENDED') {
+      return [];
+    }
     return currentUser.permissions && currentUser.permissions.length > 0
       ? currentUser.permissions
       : ROLE_PERMISSIONS[currentUser.role] || [];
@@ -191,6 +327,24 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   }, [permissions]);
 
   const capabilities = useMemo<RoleCapabilities>(() => {
+    const isSuspended = currentUser.status === 'SUSPENDED';
+    if (isSuspended) {
+      return {
+        canApproveCase: false,
+        canReferHandoff: false,
+        canEscalateCase: false,
+        canOverridePriority: false,
+        canRunAi: false,
+        canAcceptDraft: false,
+        canManageSettings: false,
+        canAccessDiagnostics: false,
+        canPerformIntake: false,
+        canViewReports: false,
+        canAssignReview: false,
+        isSuspended: true,
+      };
+    }
+
     const role = currentUser.role;
     const isDoc = role === 'DOCTOR';
     const isAdmin = role === 'ADMIN';
@@ -209,8 +363,9 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       canPerformIntake: hasPermission('case:write'),
       canViewReports: hasPermission('evidence:read') || isDoc || isNurse || isCHO || isAdmin,
       canAssignReview: (isDoc || isAdmin) && hasPermission('review:assign'),
+      isSuspended: false,
     };
-  }, [currentUser.role, hasPermission]);
+  }, [currentUser.status, currentUser.role, hasPermission]);
 
   const hasInitializedAuthRef = useRef(false);
 
@@ -300,8 +455,24 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Role mapping for UI layout
+    // Role mapping and suspension verification
     const lower = staffIdOrEmail.toLowerCase();
+    const matchedUser = users.find(
+      (u) =>
+        u.id.toLowerCase() === lower ||
+        (u.email && u.email.toLowerCase() === lower) ||
+        (u.role === 'DOCTOR' && (lower.includes('doc') || lower.includes('sharma') || lower.includes('dr'))) ||
+        (u.role === 'NURSE' && (lower.includes('nurse') || lower.includes('sunita') || lower.includes('maya'))) ||
+        (u.role === 'HEALTH_WORKER' && (lower.includes('cho') || lower.includes('ramesh') || lower.includes('rajesh') || lower.includes('health'))) ||
+        (u.role === 'ADMIN' && lower.includes('admin'))
+    );
+
+    if (matchedUser && matchedUser.status === 'SUSPENDED') {
+      throw new Error(
+        `Account Suspended: Clinical credentials for ${matchedUser.name} (${matchedUser.registrationNumber || matchedUser.id}) have been deactivated by Facility Administration. Contact your Clinical Director.`
+      );
+    }
+
     if (lower.includes('nurse') || lower.includes('sunita') || lower.includes('maya')) {
       setUserRole('NURSE');
     } else if (lower.includes('cho') || lower.includes('ramesh') || lower.includes('rajesh') || lower.includes('health')) {
@@ -350,6 +521,10 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         capabilities,
         permissions,
         hasPermission,
+        grantStaffAccess,
+        updateStaffRole,
+        toggleStaffStatus,
+        deleteStaffMember,
         setIsSidebarCollapsed,
         toggleSidebar,
         setCurrentUser,

@@ -11,6 +11,7 @@ import {
   ArrowRight,
   PlusCircle,
   Eye,
+  ShieldAlert,
 } from 'lucide-react';
 import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
 import { QuickInspectDrawer } from '../common/QuickInspectDrawer';
@@ -33,7 +34,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     refreshCases,
     outbox,
   } = useTriage();
-  const { currentUser, currentFacility } = useRole();
+  const { currentUser, currentFacility, capabilities } = useRole();
 
   const [inspectPatient, setInspectPatient] = useState<Patient | null>(null);
   const [isInspectOpen, setIsInspectOpen] = useState(false);
@@ -88,13 +89,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <Button
             variant="primary"
             size="md"
-            onClick={onNewIntake}
+            disabled={capabilities.isSuspended || !capabilities.canPerformIntake}
+            title={capabilities.isSuspended ? "Account Suspended: Cannot initiate patient intake" : undefined}
+            onClick={capabilities.isSuspended ? undefined : onNewIntake}
             icon={<PlusCircle className="w-4 h-4" />}
           >
             Start New Intake
           </Button>
         </div>
       </div>
+
+      {/* Suspension Alert Card */}
+      {capabilities.isSuspended && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3 shadow-xs animate-in fade-in">
+          <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-rose-900">Clinical Authority Suspended</h3>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-200/80 text-rose-900 uppercase">
+                Locked Out
+              </span>
+            </div>
+            <p className="text-xs text-rose-700 leading-relaxed">
+              Your practitioner account (<strong>{currentUser.name}</strong>, {currentUser.registrationNumber || currentUser.id}) has been suspended by Facility Administration. You are locked in restricted read-only mode and cannot review cases, perform intake, sign notes, or dispatch referrals.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 4 KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

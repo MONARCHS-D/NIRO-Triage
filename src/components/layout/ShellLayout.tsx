@@ -8,7 +8,7 @@ import { OfflineBanner } from '../common/OfflineBanner';
 import { useRole } from '../../context/RoleContext';
 import { PatientMobileExperience } from '../mobile/PatientMobileExperience';
 import { Button } from '../common/Button';
-import { Lock, AlertCircle } from 'lucide-react';
+import { Lock, AlertCircle, ShieldAlert } from 'lucide-react';
 
 interface ShellLayoutProps {
   children: React.ReactNode;
@@ -16,7 +16,15 @@ interface ShellLayoutProps {
 
 export const ShellLayout: React.FC<ShellLayoutProps> = ({ children }) => {
   const router = useRouter();
-  const { viewMode, exitPatientMobile, isAuthenticated, isSessionExpired, setIsSessionExpired } = useRole();
+  const {
+    viewMode,
+    exitPatientMobile,
+    isAuthenticated,
+    isSessionExpired,
+    setIsSessionExpired,
+    capabilities,
+    currentUser,
+  } = useRole();
 
   // Route guard per Section 40
   useEffect(() => {
@@ -52,6 +60,19 @@ export const ShellLayout: React.FC<ShellLayoutProps> = ({ children }) => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
+        {capabilities.isSuspended && (
+          <div className="bg-rose-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between gap-3 shadow-sm z-30 border-b border-rose-700">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-white shrink-0 animate-pulse" />
+              <span>
+                <strong>PRACTITIONER SUSPENDED:</strong> Clinical credentials for <strong>{currentUser.name}</strong> ({currentUser.registrationNumber || currentUser.id}) are suspended by Facility Administration. Write actions, AI analysis, case approvals, and handoffs are locked in read-only mode.
+              </span>
+            </div>
+            <span className="text-[10px] bg-rose-800 text-rose-100 px-2 py-0.5 rounded uppercase tracking-wider font-bold shrink-0">
+              Restricted Read-Only
+            </span>
+          </div>
+        )}
         <OfflineBanner />
 
         <main className="flex-1 p-3 sm:p-5 lg:p-6 xl:p-8 max-w-[1800px] 2xl:max-w-[2100px] w-full mx-auto transition-all duration-200">

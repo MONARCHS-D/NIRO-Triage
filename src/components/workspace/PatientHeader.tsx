@@ -175,7 +175,9 @@ export const PatientHeader: React.FC<PatientHeaderProps> = ({
             <Button
               variant="secondary"
               size="md"
-              onClick={onOpenEditModal}
+              disabled={capabilities.isSuspended}
+              title={capabilities.isSuspended ? 'Account Suspended: Cannot edit patient record' : undefined}
+              onClick={capabilities.isSuspended ? undefined : onOpenEditModal}
               icon={<Edit className="w-3.5 h-3.5" />}
             >
               Edit

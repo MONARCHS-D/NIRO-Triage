@@ -123,8 +123,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
         {isSidebarCollapsed ? (
           <div className="flex flex-col items-center gap-2">
             <div
-              className="w-8 h-8 rounded-full bg-blue-100 text-[#2563EB] flex items-center justify-center font-bold text-xs flex-shrink-0 cursor-default"
-              title={`${currentUser.name} · ${currentUser.title} (${currentFacility.name})`}
+              className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 cursor-default ${
+                currentUser.status === 'SUSPENDED'
+                  ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                  : 'bg-blue-100 text-[#2563EB]'
+              }`}
+              title={`${currentUser.name} · ${currentUser.status === 'SUSPENDED' ? 'SUSPENDED' : currentUser.title} (${currentFacility.name})`}
             >
               {currentUser.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
             </div>
@@ -140,15 +144,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
         ) : (
           <>
             <div className="flex items-start gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-[#2563EB] flex items-center justify-center font-bold text-xs flex-shrink-0">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                  currentUser.status === 'SUSPENDED'
+                    ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                    : 'bg-blue-100 text-[#2563EB]'
+                }`}
+              >
                 {currentUser.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-[#102033] truncate">{currentUser.name}</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-[#164FD6] border border-blue-200 truncate">
-                    {currentUser.role === 'DOCTOR' ? 'Doctor · Full Signoff' : currentUser.role === 'NURSE' ? 'Nurse · Intake & Vitals' : currentUser.role === 'HEALTH_WORKER' ? 'CHO · Frontline' : currentUser.role === 'ADMIN' ? 'Facility Admin' : 'Patient'}
-                  </span>
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  {currentUser.status === 'SUSPENDED' ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300 flex items-center gap-1 truncate">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
+                      Suspended · Access Revoked
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-[#164FD6] border border-blue-200 truncate">
+                      {currentUser.role === 'DOCTOR' ? 'Doctor · Full Signoff' : currentUser.role === 'NURSE' ? 'Nurse · Intake & Vitals' : currentUser.role === 'HEALTH_WORKER' ? 'CHO · Frontline' : currentUser.role === 'ADMIN' ? 'Facility Admin' : 'Patient'}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 mt-1 text-[10px] text-[#526276] truncate">
                   <Hospital className="w-3 h-3 flex-shrink-0" />

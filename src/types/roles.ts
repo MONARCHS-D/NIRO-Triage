@@ -40,6 +40,7 @@ export interface RoleCapabilities {
   canPerformIntake: boolean;
   canViewReports: boolean;
   canAssignReview: boolean;
+  isSuspended: boolean;
 }
 
 export interface UserProfile {
@@ -48,10 +49,23 @@ export interface UserProfile {
   role: UserRole;
   title: string;
   facility: string;
+  email?: string;
   avatarUrl?: string;
   department?: string;
   registrationNumber?: string;
+  status?: 'ACTIVE' | 'SUSPENDED';
+  joinedDate?: string;
   permissions?: PermissionCode[];
+}
+
+export interface GrantAccessInput {
+  name: string;
+  email: string;
+  role: UserRole;
+  title: string;
+  department: string;
+  registrationNumber?: string;
+  facility: string;
 }
 
 export interface Facility {

@@ -25,10 +25,22 @@ import {
   Sliders,
   CheckCircle2,
   Volume2,
+  Users,
+  UserPlus,
+  ShieldAlert,
+  Trash2,
+  UserCheck,
+  Shield,
+  Search,
+  Building2,
+  BadgeCheck,
+  AlertCircle,
 } from 'lucide-react';
+import { GrantAccessModal } from './GrantAccessModal';
 
 type SettingsTab =
   | 'facility'
+  | 'users'
   | 'language'
   | 'notifications'
   | 'accessibility'
@@ -40,8 +52,12 @@ export const SettingsView: React.FC = () => {
     currentUser,
     currentFacility,
     facilities,
+    users,
     setCurrentFacility,
     setUserRole,
+    updateStaffRole,
+    toggleStaffStatus,
+    deleteStaffMember,
     isOffline,
     setIsOffline,
     capabilities,
@@ -55,14 +71,37 @@ export const SettingsView: React.FC = () => {
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [fontSize, setFontSize] = useState<'standard' | 'large'>('standard');
 
-  const tabs: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  const [showGrantModal, setShowGrantModal] = useState(false);
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
+  const [staffRoleFilter, setStaffRoleFilter] = useState<'ALL' | UserRole>('ALL');
+
+  const tabs: {
+    id: SettingsTab;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    adminOnly?: boolean;
+  }[] = [
     { id: 'facility', label: 'Profile & Facility', icon: Hospital },
+    { id: 'users', label: 'Staff & Access', icon: Users, adminOnly: true },
     { id: 'language', label: 'Language & Speech', icon: Languages },
     { id: 'notifications', label: 'Triage Alerts', icon: Bell },
     { id: 'accessibility', label: 'Accessibility', icon: Eye },
     { id: 'privacy', label: 'Privacy & Retention', icon: Lock },
-    { id: 'diagnostics', label: 'System Diagnostics', icon: Wrench },
+    { id: 'diagnostics', label: 'System Diagnostics', icon: Wrench, adminOnly: true },
   ];
+
+  const filteredStaff = users.filter((u) => {
+    const matchesRole = staffRoleFilter === 'ALL' || u.role === staffRoleFilter;
+    const q = staffSearchQuery.trim().toLowerCase();
+    const matchesQuery =
+      !q ||
+      u.name.toLowerCase().includes(q) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.registrationNumber && u.registrationNumber.toLowerCase().includes(q)) ||
+      (u.department && u.department.toLowerCase().includes(q)) ||
+      u.id.toLowerCase().includes(q);
+    return matchesRole && matchesQuery;
+  });
 
   return (
     <div className="space-y-6 relative overflow-hidden">
@@ -102,12 +141,14 @@ export const SettingsView: React.FC = () => {
                   className={`w-4 h-4 ${isActive ? 'text-[#2563EB]' : 'text-[#6B7B8F]'}`}
                 />
                 <span>{tab.label}</span>
-                {tab.id === 'diagnostics' && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
-                    capabilities.canAccessDiagnostics
-                      ? 'bg-blue-100 text-[#164FD6]'
-                      : 'bg-slate-100 text-[#6B7B8F]'
-                  }`}>
+                {tab.adminOnly && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                      capabilities.canManageSettings
+                        ? 'bg-blue-100 text-[#164FD6]'
+                        : 'bg-slate-100 text-[#6B7B8F]'
+                    }`}
+                  >
                     Admin
                   </span>
                 )}
@@ -119,8 +160,8 @@ export const SettingsView: React.FC = () => {
 
       {/* Tab Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column (7-8 cols): Main Settings Form */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+        {/* Main Settings Form Column */}
+        <div className={activeTab === 'users' ? 'lg:col-span-12 space-y-6' : 'lg:col-span-7 xl:col-span-8 space-y-6'}>
           {/* TAB 1: FACILITY & PROFILE */}
           {activeTab === 'facility' && (
             <div className="space-y-6">
@@ -167,60 +208,391 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Role & Permissions (RBAC) */}
+              {/* Role & Practitioner Credentials (RBAC Read-Only) */}
               <div className="bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-4">
-                <div className="flex items-center gap-2 pb-3 border-b border-[#E6ECF2]">
-                  <User className="w-5 h-5 text-[#2563EB]" />
-                  <div>
-                    <h3 className="text-sm font-bold text-[#102033]">Clinical Role &amp; Access Control</h3>
-                    <p className="text-xs text-[#6B7B8F]">
-                      Permissions for case approval, referral dispatch, and diagnostic sign-off
-                    </p>
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[#E6ECF2]">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-[#2563EB]" />
+                    <div>
+                      <h3 className="text-sm font-bold text-[#102033]">Authenticated Practitioner Credentials</h3>
+                      <p className="text-xs text-[#6B7B8F]">
+                        Cryptographically verified session credentials under National Health Service / ABDM Clinical Governance
+                      </p>
+                    </div>
+                  </div>
+                  {currentUser.status === 'SUSPENDED' ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 border border-rose-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
+                      Suspended · Access Revoked
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Active Session
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+                    <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">Practitioner Name</span>
+                    <span className="font-semibold text-[#102033] text-sm block mt-0.5">{currentUser.name}</span>
+                    <span className="text-[11px] text-[#526276]">{currentUser.email || `${currentUser.id.toLowerCase()}@careintel.local`}</span>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+                    <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">Assigned Clinical Role</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${
+                        currentUser.status === 'SUSPENDED'
+                          ? 'bg-rose-100 text-rose-700 line-through'
+                          : 'bg-blue-100 text-[#164FD6]'
+                      }`}>
+                        <Shield className="w-3 h-3" />
+                        {currentUser.role === 'DOCTOR'
+                          ? 'Medical Officer / Attending Physician'
+                          : currentUser.role === 'NURSE'
+                          ? 'Triage Nurse Grade-I'
+                          : currentUser.role === 'ADMIN'
+                          ? 'Facility System Administrator'
+                          : currentUser.role === 'HEALTH_WORKER'
+                          ? 'Community Health Officer (CHO)'
+                          : 'Patient Portal'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-[#6B7B8F] block mt-1">System Identifier: <code className="font-mono text-[#2563EB]">{currentUser.id}</code></span>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+                    <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">Medical Council Registration</span>
+                    <span className="font-mono font-semibold text-[#102033] block mt-0.5">
+                      {currentUser.registrationNumber || 'MCI/DMC-74921-A'}
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-medium">Verified against ABDM HPR Registry</span>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+                    <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">Department &amp; Facility Posting</span>
+                    <span className="font-semibold text-[#102033] block mt-0.5">
+                      {currentUser.department || 'Emergency Medicine & Triage'}
+                    </span>
+                    <span className="text-[10px] text-[#6B7B8F] truncate block">
+                      {currentFacility.name}
+                    </span>
                   </div>
                 </div>
 
-                <div className="space-y-3 text-xs">
-                  <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-[#102033]">Active User Profile:</span>
-                      <div className="text-[#526276]">
-                        {currentUser.name} ({currentUser.role})
+                {currentUser.status === 'SUSPENDED' ? (
+                  <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-xs flex items-start gap-2.5">
+                    <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <span className="font-bold text-rose-900 block">Critical Notice: Clinical Authority Suspended</span>
+                      <p className="text-rose-700 text-[11px] leading-relaxed">
+                        This practitioner account has been deactivated by Facility Administration. You cannot approve triage cases, accept AI draft summaries, execute inter-facility handoffs, or record clinical intakes. Contact your Medical Superintendent to initiate reinstatement.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-lg bg-blue-50/70 border border-blue-200/60 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <BadgeCheck className="w-4 h-4 text-[#2563EB] shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <span className="font-semibold text-[#102033] block">Clinical Governance &amp; Privilege Enforcement</span>
+                        <p className="text-[#526276] text-[11px] leading-relaxed">
+                          Practitioner clinical roles are centrally provisioned by facility administration. Self-reassignment of clinical credentials is prohibited under institutional medical safety protocols.
+                        </p>
                       </div>
                     </div>
-                    <span className="text-[11px] font-mono text-[#2563EB] bg-blue-50 px-2 py-1 rounded">
-                      {currentUser.id}
+                    {capabilities.canManageSettings && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('users')}
+                        className="shrink-0 px-3 py-1.5 rounded-lg bg-[#2563EB] text-white font-semibold text-xs hover:bg-[#164FD6] transition-colors cursor-pointer"
+                      >
+                        Manage Staff Directory →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: STAFF & ACCESS MANAGEMENT (ADMIN RBAC) */}
+          {activeTab === 'users' && (
+            !capabilities.canManageSettings ? (
+              <div className="bg-white rounded-xl border border-[#E6ECF2] p-8 shadow-xs text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-[#102033]">Administrator Authorization Required</h3>
+                <p className="text-xs text-[#526276] max-w-md mx-auto leading-relaxed">
+                  Practitioner access provisioning, clinical credentialing, and role-based access control are restricted to Facility System Administrators (RBAC <code className="bg-slate-100 px-1 py-0.5 rounded text-[#25364A] font-mono">manage:users</code>).
+                </p>
+                <div className="pt-2">
+                  <span className="text-[11px] text-[#6B7B8F]">
+                    Your active session role is <strong className="text-[#102033]">{currentUser.title || currentUser.role}</strong>. Please consult the Facility Medical Director to request administrative elevation.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Metric Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-white p-3.5 rounded-xl border border-[#E6ECF2] shadow-xs">
+                    <span className="text-[11px] font-bold text-[#6B7B8F] uppercase block">Total Staff</span>
+                    <span className="text-xl font-bold text-[#102033] block mt-0.5">{users.length}</span>
+                    <span className="text-[10px] text-emerald-600 font-medium">Provisioned in Registry</span>
+                  </div>
+                  <div className="bg-white p-3.5 rounded-xl border border-[#E6ECF2] shadow-xs">
+                    <span className="text-[11px] font-bold text-[#6B7B8F] uppercase block">Medical Officers</span>
+                    <span className="text-xl font-bold text-[#2563EB] block mt-0.5">
+                      {users.filter((u) => u.role === 'DOCTOR' && u.status !== 'SUSPENDED').length}
                     </span>
+                    <span className="text-[10px] text-[#526276]">Advisory &amp; Sign-off</span>
+                  </div>
+                  <div className="bg-white p-3.5 rounded-xl border border-[#E6ECF2] shadow-xs">
+                    <span className="text-[11px] font-bold text-[#6B7B8F] uppercase block">Triage Nurses</span>
+                    <span className="text-xl font-bold text-teal-600 block mt-0.5">
+                      {users.filter((u) => u.role === 'NURSE' && u.status !== 'SUSPENDED').length}
+                    </span>
+                    <span className="text-[10px] text-[#526276]">Vitals &amp; Intake</span>
+                  </div>
+                  <div className="bg-white p-3.5 rounded-xl border border-[#E6ECF2] shadow-xs">
+                    <span className="text-[11px] font-bold text-[#6B7B8F] uppercase block">CHOs &amp; Frontline</span>
+                    <span className="text-xl font-bold text-indigo-600 block mt-0.5">
+                      {users.filter((u) => u.role === 'HEALTH_WORKER' && u.status !== 'SUSPENDED').length}
+                    </span>
+                    <span className="text-[10px] text-[#526276]">Community Screening</span>
+                  </div>
+                </div>
+
+                {/* Staff Directory Main Card */}
+                <div className="bg-white rounded-xl border border-[#E6ECF2] shadow-xs overflow-hidden">
+                  {/* Top Bar */}
+                  <div className="p-5 border-b border-[#E6ECF2] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Users className="w-5 h-5 text-[#2563EB]" />
+                        <h3 className="text-sm font-bold text-[#102033]">
+                          Practitioner Staff Directory &amp; RBAC Control
+                        </h3>
+                      </div>
+                      <p className="text-xs text-[#6B7B8F] mt-0.5">
+                        Provision credentials, assign clinical roles, and govern access across {currentFacility.name}
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setShowGrantModal(true)}
+                      icon={<UserPlus className="w-4 h-4" />}
+                      className="shrink-0"
+                    >
+                      Grant Access / Add Staff
+                    </Button>
                   </div>
 
-                  <div>
-                    <label className="block font-semibold text-[#25364A] mb-1">Switch Clinical Role:</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {/* Filter & Search Bar */}
+                  <div className="p-4 bg-[#F8FAFC] border-b border-[#E6ECF2] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
+                    <div className="relative flex-1 max-w-md">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7B8F]" />
+                      <input
+                        type="text"
+                        placeholder="Search by name, email, reg number, department..."
+                        value={staffSearchQuery}
+                        onChange={(e) => setStaffSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-[#102033] placeholder:text-[#94A3B8] focus:border-[#2563EB] focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                       {(
                         [
-                          { role: 'DOCTOR', label: 'Doctor / MO' },
-                          { role: 'NURSE', label: 'Triage Nurse' },
-                          { role: 'ADMIN', label: 'Admin' },
-                          { role: 'HEALTH_WORKER', label: 'CHO / Worker' },
-                        ] as const satisfies { role: UserRole; label: string }[]
-                      ).map(({ role, label }) => (
+                          { key: 'ALL', label: 'All Roles' },
+                          { key: 'DOCTOR', label: 'Doctors' },
+                          { key: 'NURSE', label: 'Nurses' },
+                          { key: 'HEALTH_WORKER', label: 'CHOs' },
+                          { key: 'ADMIN', label: 'Admins' },
+                        ] as const
+                      ).map((filter) => (
                         <button
-                          key={role}
+                          key={filter.key}
                           type="button"
-                          onClick={() => setUserRole(role)}
-                          className={`p-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
-                            currentUser.role === role
-                              ? 'bg-[#2563EB] text-white border-[#2563EB]'
-                              : 'bg-white text-[#25364A] border-[#E6ECF2] hover:bg-slate-50'
+                          onClick={() => setStaffRoleFilter(filter.key)}
+                          className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                            staffRoleFilter === filter.key
+                              ? 'bg-[#2563EB] text-white'
+                              : 'bg-white border border-slate-200 text-[#526276] hover:bg-slate-50'
                           }`}
                         >
-                          {label}
+                          {filter.label}
                         </button>
                       ))}
                     </div>
                   </div>
+
+                  {/* Staff Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#F1F5F9] text-[#526276] font-semibold border-b border-[#E6ECF2]">
+                        <tr>
+                          <th className="py-3 px-4">Practitioner Details</th>
+                          <th className="py-3 px-4">Medical Reg No. &amp; Dept</th>
+                          <th className="py-3 px-4">Clinical Role (RBAC)</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E6ECF2]">
+                        {filteredStaff.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center text-[#6B7B8F]">
+                              No practitioners found matching &quot;{staffSearchQuery}&quot;
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredStaff.map((u) => {
+                            const isCurrentUser = u.id === currentUser.id;
+                            const isSuspended = u.status === 'SUSPENDED';
+
+                            return (
+                              <tr
+                                key={u.id}
+                                className={`hover:bg-[#F8FAFC] transition-colors ${
+                                  isSuspended ? 'opacity-60 bg-slate-50/50' : ''
+                                }`}
+                              >
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-blue-100 text-[#164FD6] font-bold flex items-center justify-center shrink-0 text-xs">
+                                      {u.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                      <div className="font-semibold text-[#102033] flex items-center gap-1.5">
+                                        <span>{u.name}</span>
+                                        {isCurrentUser && (
+                                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-[#164FD6]">
+                                            You
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-[11px] text-[#6B7B8F] block">
+                                        {u.email || `${u.id.toLowerCase()}@careintel.local`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="py-3 px-4">
+                                  <span className="font-mono text-[#102033] font-medium block">
+                                    {u.registrationNumber || 'N/A'}
+                                  </span>
+                                  <span className="text-[11px] text-[#6B7B8F] block">
+                                    {u.department || 'General Clinical'}
+                                  </span>
+                                </td>
+
+                                <td className="py-3 px-4">
+                                  <select
+                                    value={u.role}
+                                    disabled={isCurrentUser}
+                                    onChange={(e) => updateStaffRole(u.id, e.target.value as UserRole)}
+                                    title={isCurrentUser ? 'You cannot alter your own administrative role' : 'Reassign clinical role'}
+                                    className={`py-1 px-2 rounded-lg border text-xs font-medium cursor-pointer ${
+                                      isCurrentUser
+                                        ? 'bg-slate-100 text-[#6B7B8F] border-slate-200 cursor-not-allowed'
+                                        : 'bg-white text-[#102033] border-slate-300 hover:border-[#2563EB]'
+                                    }`}
+                                  >
+                                    <option value="DOCTOR">Doctor (Full Sign-off)</option>
+                                    <option value="NURSE">Staff Nurse (Intake &amp; Vitals)</option>
+                                    <option value="ADMIN">Facility Admin (System)</option>
+                                    <option value="HEALTH_WORKER">CHO (Frontline Intake)</option>
+                                    <option value="PATIENT">Patient (Portal)</option>
+                                  </select>
+                                </td>
+
+                                <td className="py-3 px-4">
+                                  {isSuspended ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                      Suspended
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      Active
+                                    </span>
+                                  )}
+                                </td>
+
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      disabled={isCurrentUser}
+                                      onClick={() => toggleStaffStatus(u.id)}
+                                      title={
+                                        isCurrentUser
+                                          ? 'Cannot suspend active session user'
+                                          : isSuspended
+                                          ? 'Reactivate practitioner access'
+                                          : 'Suspend practitioner access'
+                                      }
+                                      className={`p-1.5 rounded-md border text-xs transition-colors cursor-pointer ${
+                                        isCurrentUser
+                                          ? 'opacity-40 cursor-not-allowed border-slate-200 text-[#94A3B8]'
+                                          : isSuspended
+                                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                          : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                      }`}
+                                    >
+                                      {isSuspended ? (
+                                        <UserCheck className="w-3.5 h-3.5" />
+                                      ) : (
+                                        <ShieldAlert className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={isCurrentUser}
+                                      onClick={() => {
+                                        if (confirm(`Revoke credentials and remove ${u.name} from facility directory?`)) {
+                                          deleteStaffMember(u.id);
+                                        }
+                                      }}
+                                      title={isCurrentUser ? 'Cannot delete active session user' : 'Revoke credentials'}
+                                      className={`p-1.5 rounded-md border text-xs transition-colors cursor-pointer ${
+                                        isCurrentUser
+                                          ? 'opacity-40 cursor-not-allowed border-slate-200 text-[#94A3B8]'
+                                          : 'border-slate-200 text-[#6B7B8F] hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                                      }`}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* ABDM Compliance Footer */}
+                  <div className="p-3 bg-[#F8FAFC] border-t border-[#E6ECF2] flex items-center gap-2 text-[11px] text-[#6B7B8F]">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      Access audit logs are cryptographically sealed. Practitioner role adjustments take effect across active triage stations immediately.
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )
           )}
 
           {/* TAB 2: LANGUAGE & SPEECH */}
@@ -514,39 +886,46 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Right Column (4 cols): Facility Context Illustration */}
-        <div className="lg:col-span-5 xl:col-span-4 bg-white rounded-xl border border-[#E6ECF2] p-5 shadow-xs space-y-4">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#2563EB] block mb-1">
-              Healthcare Ecosystem Context
-            </span>
-            <h3 className="text-sm font-bold text-[#102033]">Community Care Infrastructure</h3>
-            <p className="text-xs text-[#526276] mt-1 leading-relaxed">
-              Designed for public health sub-centres, urban primary facilities, and district referral hubs.
-            </p>
-          </div>
-
-          <div className="relative w-full h-72 rounded-lg overflow-hidden border border-slate-100 shadow-2xs group">
-            <Image
-              src="/illustrations/settings/community_context.png"
-              alt="Contemporary Indian community healthcare technology environment"
-              fill
-              priority
-              sizes="(max-width: 1024px) 100vw, 380px"
-              className="object-cover object-center group-hover:scale-102 transition-transform duration-500"
-            />
-          </div>
-
-          <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] text-[11px] text-[#6B7B8F] space-y-1">
-            <div className="font-semibold text-[#102033] flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
-              <span>Human-in-the-Loop Protocol</span>
+        {activeTab !== 'users' && (
+          <div className="lg:col-span-5 xl:col-span-4 bg-white rounded-xl border border-[#E6ECF2] p-5 shadow-xs space-y-4">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#2563EB] block mb-1">
+                Healthcare Ecosystem Context
+              </span>
+              <h3 className="text-sm font-bold text-[#102033]">Community Care Infrastructure</h3>
+              <p className="text-xs text-[#526276] mt-1 leading-relaxed">
+                Designed for public health sub-centres, urban primary facilities, and district referral hubs.
+              </p>
             </div>
-            <p className="leading-normal">
-              Digital intake assists frontline workers; registered physicians make all clinical triage &amp; disposition decisions.
-            </p>
+
+            <div className="relative w-full h-72 rounded-lg overflow-hidden border border-slate-100 shadow-2xs group">
+              <Image
+                src="/illustrations/settings/community_context.png"
+                alt="Contemporary Indian community healthcare technology environment"
+                fill
+                priority
+                sizes="(max-width: 1024px) 100vw, 380px"
+                className="object-cover object-center group-hover:scale-102 transition-transform duration-500"
+              />
+            </div>
+
+            <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] text-[11px] text-[#6B7B8F] space-y-1">
+              <div className="font-semibold text-[#102033] flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+                <span>Human-in-the-Loop Protocol</span>
+              </div>
+              <p className="leading-normal">
+                Digital intake assists frontline workers; registered physicians make all clinical triage &amp; disposition decisions.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </div>
+
+      <GrantAccessModal
+        open={showGrantModal}
+        onClose={() => setShowGrantModal(false)}
+      />
     </div>
   );
 };
