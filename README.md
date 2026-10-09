@@ -21,6 +21,7 @@
 
 - [System Architecture](#-system-architecture)
 - [Key Features](#-key-features)
+- [Role-Based Access Control (RBAC)](#5-role-based-access-control-rbac)
 - [Dual-Mode Architecture (Live + Resilient Offline)](#-dual-mode-architecture)
 - [Quick Start Guide](#-quick-start-guide)
   - [1. CareIntel Backend Setup](#1-careintel-backend-setup-python-312)
@@ -29,13 +30,14 @@
 - [Multimodal Clinical Workflows](#-multimodal-clinical-workflows)
 - [API & Health Probes Reference](#-api--health-probes-reference)
 - [Repository Structure](#-repository-structure)
+- [Documentation & Changelog](#-documentation--changelog)
 - [Troubleshooting & FAQ](#-troubleshooting--faq)
 
 ---
 
 ## 🏛 System Architecture
 
-NIRO-Triage bridges an emergency clinical frontend with an asynchronous, event-driven Python backend:
+CareIntel bridges an emergency clinical frontend with an asynchronous, event-driven Python backend:
 
 ```mermaid
 flowchart TD
@@ -102,17 +104,21 @@ flowchart TD
 - **Document & Lab Viewer (`/intake/report` & `/reports`)**: High-resolution document inspector with OCR bounding boxes and structured entity extraction.
 
 ### 5. Role-Based Access Control (RBAC)
-- Fine-grained permission matrix across clinical personas:
-  - `doctor`: Complete review, medication modification, AI draft approval, referral dispatch.
-  - `nurse`: Triage review, vital logging, evidence upload, priority elevation.
-  - `health_worker` (CHO): Field intake, consent capture, preliminary vitals logging.
-  - `admin`: User provisioning, facility scoping, audit log review.
+CareIntel enforces a zero-trust, human-in-the-loop authorization matrix mapped directly to backend Alembic migration `0015_seed_role_permissions.py`:
+- **`doctor`**: Full clinical review authority (`review:*`, `ai:*`, `referral:*`, `handoff:*`, `escalation:*`). Allowed to execute Advisory AI, accept/edit draft clinical notes, override urgency triage tiers (Low, Medium, Escalate), and sign off on case approvals.
+- **`nurse`**: Triage vital entry, bedside symptom collection, missing information requests, and nurse triage notes (`case:write`, `review:write`). Gated from AI synthesis execution, priority overrides, and referral dispatch.
+- **`health_worker` (CHO)**: Frontline sub-centre and camp intake (`case:write`, `evidence:write`, `consent:write`). Form and voice dictation enabled; physician sign-off and administrative tools restricted.
+- **`admin`**: Facility systems administrator (`manage:users`, `manage:system`). Access to cloud telemetry, engine health, database parameters, and offline simulation.
+- **`patient`**: Citizen self-service view with mobile intake submission and queue tracking; strict escalation prevention guards.
+
+> Detailed specifications, typed permission codes, and code examples:  
+> 📖 [**RBAC Architecture & Capabilities Guide**](docs/RBAC_ARCHITECTURE.md)
 
 ---
 
 ## ⚡ Dual-Mode Architecture
 
-NIRO-Triage is built for resilience in unpredictable healthcare environments:
+CareIntel is built for resilience in unpredictable healthcare environments:
 
 | Mode | Trigger | Storage & Backend | Clinician Experience |
 | :--- | :--- | :--- | :--- |
@@ -190,7 +196,7 @@ For full background AI processing and event dispatching:
 
 ### 2. Next.js Frontend Setup (Node 20+)
 
-Open a terminal in the repository root (`NIRO-Triage`):
+Open a terminal in the repository root:
 
 ```bash
 # 1. Install frontend dependencies
@@ -250,7 +256,7 @@ CareIntel provides OpenAPI and interactive documentation at:
 ## 📂 Repository Structure
 
 ```text
-NIRO-Triage/
+CareIntel/
 ├── src/                               # Next.js 16 App Directory
 │   ├── app/                           # App Router Pages & Layouts
 │   │   ├── dashboard/                 # Operational overview & KPIs
@@ -269,6 +275,10 @@ NIRO-Triage/
 │   ├── context/                       # RoleContext & Auth state
 │   └── lib/api/                       # Typed CareIntel API client & fallback cache
 │
+├── docs/                              # In-Depth Clinical & Architectural Documentation
+│   ├── RBAC_ARCHITECTURE.md           # Permission matrix, capabilities & security guards
+│   └── CLINICAL_WORKFLOWS.md          # Multi-lingual intake, triage & offline resilience
+│
 ├── CareIntel/                         # Python 3.12 FastAPI Backend
 │   ├── src/careintel/                 # Core Python package
 │   │   ├── api/v1/                    # REST route controllers
@@ -282,9 +292,19 @@ NIRO-Triage/
 │   ├── pyproject.toml                 # Backend dependencies & tools
 │   └── STARTUP.md                     # Comprehensive backend operations manual
 │
+├── CHANGELOG.md                       # Release notes and version history
 ├── AGENTS.md                          # Framework rules & documentation links
 └── README.md                          # Master documentation (this file)
 ```
+
+---
+
+## 📚 Documentation & Changelog
+
+- 📘 [**RBAC Architecture & Security Specification**](docs/RBAC_ARCHITECTURE.md): Deep-dive into typed permissions, clinical role authorization, and privilege escalation guards.
+- 🩺 [**Clinical Triage & Operational Workflows**](docs/CLINICAL_WORKFLOWS.md): Multimodal voice/form intake, review readiness standards, and offline outbox synchronization.
+- 📋 [**Changelog & Release Notes**](CHANGELOG.md): Historical record of major architectural updates, bug fixes, and UX refinements.
+- ⚙️ [**Backend Operations Manual**](CareIntel/STARTUP.md): Complete guide for Supabase PostgreSQL, Redis Cloud, Celery workers, and outbox runner.
 
 ---
 

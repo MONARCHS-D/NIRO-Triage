@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Facility, PermissionCode, RoleCapabilities, UserProfile, UserRole } from '../types/roles';
 import { INITIAL_FACILITIES, INITIAL_USERS } from '../lib/syntheticData';
 import { authApi } from '../lib/api/auth';
@@ -166,12 +166,10 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         setViewMode('PATIENT_MOBILE');
       } else {
         setLastStaffRole(role);
-        if (viewMode === 'PATIENT_MOBILE') {
-          setViewMode('REVIEWER_DESKTOP');
-        }
+        setViewMode((prev) => (prev === 'PATIENT_MOBILE' ? 'REVIEWER_DESKTOP' : prev));
       }
     }
-  }, [users, viewMode]);
+  }, [users]);
 
   const exitPatientMobile = useCallback(() => {
     setViewMode('REVIEWER_DESKTOP');
@@ -214,8 +212,13 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     };
   }, [currentUser.role, hasPermission]);
 
-  // Initial load: check token and validate session with backend
+  const hasInitializedAuthRef = useRef(false);
+
+  // Initial load: check token and validate session with backend once
   useEffect(() => {
+    if (hasInitializedAuthRef.current) return;
+    hasInitializedAuthRef.current = true;
+
     const initAuth = async () => {
       const token = getAuthToken();
       if (token) {

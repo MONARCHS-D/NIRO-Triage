@@ -1,0 +1,64 @@
+# Changelog
+
+All notable changes to the **CareIntel** Clinical Triage Workstation will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Added
+- **Role-Based Access Control (RBAC) Engine (`src/types/roles.ts` & `src/context/RoleContext.tsx`)**:
+  - Full domain alignment with Alembic migration `0015_seed_role_permissions.py`.
+  - Type-safe `PermissionCode` union covering clinical use cases: `case:*`, `evidence:*`, `ai:*`, `review:*`, `escalation:*`, `referral:*`, `handoff:*`, `manage:*`.
+  - Reactive `RoleCapabilities` interface (`canApproveCase`, `canReferHandoff`, `canEscalateCase`, `canOverridePriority`, `canRunAi`, `canAcceptDraft`, `canManageSettings`, `canAccessDiagnostics`, `canPerformIntake`, `canViewReports`).
+  - Granular `hasPermission(perm)` method on `useRole()`.
+- **Clinical Decision Control Gating (`src/components/workspace/SummaryTab.tsx`)**:
+  - Gated "Run Advisory AI" (`capabilities.canRunAi`) with informational tooltips.
+  - Gated "Accept draft ▾" and "Edit" (`capabilities.canAcceptDraft`) for non-physicians.
+  - Gated priority overrides: "Mark as Low", "Mark as Medium", and "Escalate" (`capabilities.canOverridePriority` / `canEscalateCase`).
+  - Gated "Approve Note" and "Refer / Handoff" quick actions (`capabilities.canApproveCase` / `canReferHandoff`).
+- **Patient Workspace Header Gating (`src/components/workspace/PatientHeader.tsx`)**:
+  - "Refer / Handoff" and "Mark as reviewed" buttons protected with capability checks and hover notices.
+- **Read-Only Audit Mode in AI Draft Review Modal (`src/components/workspace/AiDraftReviewModal.tsx`)**:
+  - Ambient amber notice banner displayed for non-physician reviewers (Staff Nurses and CHOs).
+  - "Accept Draft", "Edit Text", and "Confirm Rejection" disabled for non-physician staff.
+- **Settings Administrative Protection (`src/components/views/SettingsView.tsx`)**:
+  - Admin badge on "System Diagnostics" tab.
+  - Dedicated "Administrator Authorization Required" gate screen for clinical staff accessing telemetry and simulation controls.
+- **Role Indicators & Navigation Polish (`src/components/layout/Sidebar.tsx` & `Topbar.tsx`)**:
+  - Role capability pills in sidebar profile card (`Doctor · Full Signoff`, `Nurse · Intake & Vitals`, `CHO · Frontline`, `Facility Admin`).
+  - Descriptive authority tiers in topbar role selector.
+- **Universal Desktop Monitor Compatibility**:
+  - Full viewport responsiveness across standard 1080p, 1440p 2K, 4K UHD, and compact 1366x768 triage terminals.
+- **E2E Browser Test Verification Suite**:
+  - Verified role switching across Doctor, Nurse, CHO, Admin, and Patient Mobile personas with full video recording.
+
+### Fixed
+- **Privilege Escalation Bug in `ShellLayout.tsx`**:
+  - Returning from Patient Mobile View previously executed a hardcoded `setUserRole('DOCTOR')`.
+  - Replaced with `exitPatientMobile()` in `RoleContext.tsx` to restore the user's authentic staff role (`NURSE`, `HEALTH_WORKER`, `ADMIN`, or `DOCTOR`).
+- **Auth Re-Initialization Effect Loop in `RoleContext.tsx`**:
+  - Decoupled `viewMode` from `setUserRole`'s callback dependencies using functional state updates.
+  - Added a mount guard (`hasInitializedAuthRef`) to ensure session token validation runs strictly once on boot, preventing cascading role resets when toggling mobile views.
+- **Product Rebranding Consistency**:
+  - Rebranded all user-facing, layout, and metadata instances from "NIRO Triage" to "CareIntel".
+  - Retained backward-compatible fallback for legacy `niro_auth_state_v1` and `niro_sidebar_collapsed` localStorage keys.
+
+### Changed
+- Refined triage notification drawer hierarchy: replaced loud colored badges with clinically focused urgency signals and abnormal vitals indicators.
+- Simplified patient workspace header telemetry: hid low-level database version stamps behind a discreet "Record Details" popover menu.
+
+---
+
+## [0.1.0] - 2026-10-08
+
+### Added
+- Initial release of the CareIntel Clinical Triage Workstation.
+- Next.js 16 App Router frontend with Tailwind CSS v4 and Lucide React icons.
+- Python 3.12 FastAPI backend with Supabase PostgreSQL pgvector, Redis, and Celery.
+- Multimodal patient intake with voice recording and OCR report viewer.
+- Live clinical triage queue and patient workspace with AI draft assistance.
+- Resilient offline storage fallback with transactional outbox synchronization.
