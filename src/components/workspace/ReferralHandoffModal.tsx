@@ -299,7 +299,7 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
               <span className="w-4 h-4 rounded-full bg-slate-200 text-[#102033] flex items-center justify-center text-[10px]">
                 2
               </span>
-              <span>Urgency</span>
+              <span>Transfer Urgency</span>
             </button>
 
             <span className="text-slate-300">→</span>
@@ -535,7 +535,7 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
               {/* Bundled Evidence Checklist */}
               <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] space-y-2.5">
                 <span className="text-xs font-bold text-[#102033] block">
-                  Bundled Evidence Package (Encrypted FHIR / PDF export):
+                  Secure Referral Package (Encrypted FHIR / PDF bundle):
                 </span>
 
                 <label htmlFor="attach-audio-checkbox" className="flex items-center gap-2 text-xs text-[#25364A] cursor-pointer">
@@ -623,6 +623,82 @@ export const ReferralHandoffModal: React.FC<ReferralHandoffModalProps> = ({
                 <div className="text-xs">
                   <span className="text-[#6B7B8F] block text-[10px] uppercase mb-0.5">Clinical Rationale</span>
                   <p className="text-[#25364A]">{transferReason}</p>
+                </div>
+
+                {/* Transparent Package Review: Included vs Excluded */}
+                <div className="pt-3 border-t border-slate-200 space-y-2">
+                  <span className="text-[10px] font-bold text-[#6B7B8F] uppercase tracking-wider block">
+                    Transparent Package Review
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-200">
+                      <span className="font-bold text-emerald-800 text-[11px] block mb-1">
+                        Included in Package ({2 + (includeAudio ? 1 : 0) + (includeLabReports ? 1 : 0) + (includeAiSummary ? 1 : 0)} items):
+                      </span>
+                      <ul className="space-y-1 text-[11px] text-emerald-950">
+                        <li className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                          <span>Demographics &amp; Vitals snapshot</span>
+                        </li>
+                        <li className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                          <span>Clinical handover reason &amp; notes</span>
+                        </li>
+                        {includeAudio && (
+                          <li className="flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                            <span>Voice intake recording &amp; transcript</span>
+                          </li>
+                        )}
+                        {includeLabReports && (
+                          <li className="flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                            <span>OCR laboratory reports &amp; facts</span>
+                          </li>
+                        )}
+                        {includeAiSummary && (
+                          <li className="flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                            <span>Verified AI triage draft note</span>
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="font-bold text-slate-700 text-[11px] block mb-1">
+                        Excluded from Package:
+                      </span>
+                      <ul className="space-y-1 text-[11px] text-slate-600">
+                        {!includeAudio && (
+                          <li className="flex items-center gap-1.5">
+                            <X className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                            <span>Audio recording (Unchecked)</span>
+                          </li>
+                        )}
+                        {!includeLabReports && (
+                          <li className="flex items-center gap-1.5">
+                            <X className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                            <span>Lab reports (Unchecked)</span>
+                          </li>
+                        )}
+                        {!includeAiSummary && (
+                          <li className="flex items-center gap-1.5">
+                            <X className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                            <span>AI draft note (Unchecked)</span>
+                          </li>
+                        )}
+                        <li className="flex items-center gap-1.5">
+                          <X className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                          <span>Internal workstation debug logs</span>
+                        </li>
+                        <li className="flex items-center gap-1.5">
+                          <X className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                          <span>Unverified draft scratchpads</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </div>
 

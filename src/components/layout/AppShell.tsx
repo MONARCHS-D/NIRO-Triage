@@ -56,7 +56,7 @@ export const AppShell: React.FC = () => {
         <Topbar />
         <OfflineBanner />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-5 lg:p-6 xl:p-8 max-w-[1800px] 2xl:max-w-[2100px] w-full mx-auto transition-all duration-200">
           {currentTab === 'dashboard' && (
             <DashboardView
               onOpenPatient={handleOpenPatientWorkspace}

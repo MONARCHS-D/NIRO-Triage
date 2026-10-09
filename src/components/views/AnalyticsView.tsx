@@ -179,7 +179,7 @@ export const AnalyticsView: React.FC = () => {
       <div className="bg-white rounded-xl border border-[#E6ECF2] p-5 shadow-xs">
         <div className="flex items-center gap-2 text-emerald-700 mb-2">
           <ShieldCheck className="w-5 h-5" />
-          <h3 className="text-sm font-bold text-[#102033]">Responsible AI &amp; Patient Safety Guarantee</h3>
+          <h3 className="text-sm font-bold text-[#102033]">Responsible AI &amp; Patient Safety Framework</h3>
         </div>
         <p className="text-xs text-[#526276] leading-relaxed">
           Zero autonomous diagnoses generated. Every triage priority determination, lab modification, and queue handoff was explicitly approved by a registered medical officer or verified healthcare professional, preserving an unalterable digital audit trail.

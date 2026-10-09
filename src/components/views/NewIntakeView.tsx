@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   FileCheck,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { consentApi } from '../../lib/api/consent';
 import { caseApi } from '../../lib/api/cases';
@@ -47,19 +48,17 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [selectedChannel, setSelectedChannel] = useState<'VOICE' | 'TYPE' | 'REPORT' | 'PHOTO'>('VOICE');
 
-  // Step 1 State: Patient Info
-  const [name, setName] = useState('Kamala Barik');
-  const [age, setAge] = useState('38');
+  // Step 1 State: Patient Info (Default empty for clean intake session)
+  const [name, setName] = useState('');
+  const [age, setAge] = useState('');
   const [gender, setGender] = useState<'Female' | 'Male' | 'Other'>('Female');
   const [primaryLanguage, setPrimaryLanguage] = useState<string>('Odia (ଓଡ଼ିଆ)');
-  const [contact, setContact] = useState('+91 94371 28912');
+  const [contact, setContact] = useState('');
   const [consentGranted, setConsentGranted] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
 
   // Step 2 State: Multimodal Input
-  const [typedComplaint, setTypedComplaint] = useState(
-    'Severe bilateral knee pain and swelling for 4 days, difficulty bearing weight in the morning.'
-  );
+  const [typedComplaint, setTypedComplaint] = useState('');
   const [capturedVoiceData, setCapturedVoiceData] = useState<{
     language: string;
     transcript: string;
@@ -68,6 +67,16 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
   } | null>(null);
   const [extractedFacts, setExtractedFacts] = useState<ExtractedFact[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const handleLoadBenchmarkDemo = () => {
+    setName('Kamala Barik');
+    setAge('38');
+    setGender('Female');
+    setPrimaryLanguage('Odia (ଓଡ଼ିଆ)');
+    setContact('+91 94371 28912');
+    setTypedComplaint('Severe bilateral knee pain and swelling for 4 days, difficulty bearing weight in the morning.');
+    setConsentGranted(true);
+  };
 
   const handleNextFromStep1 = () => {
     if (!consentGranted) {
@@ -325,14 +334,24 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
 
       {/* Step 1: Patient Info & Consent (Section 6) */}
       {currentStep === 1 && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
           {/* Left Column: Demographics Form */}
-          <div className="lg:col-span-7 xl:col-span-8 bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-6">
-            <div>
-              <h3 className="text-base font-bold text-[#102033]">Basic Patient Demographics</h3>
-              <p className="text-xs text-[#6B7B8F] mt-0.5">
-                Register identity and obtain patient triage consent before beginning clinical session
-              </p>
+          <div className="xl:col-span-8 bg-white rounded-xl border border-[#E6ECF2] p-6 shadow-xs space-y-6">
+            <div className="flex flex-wrap items-center justify-between pb-3 border-b border-[#E6ECF2] gap-2">
+              <div>
+                <h3 className="text-base font-bold text-[#102033]">Basic Patient Demographics</h3>
+                <p className="text-xs text-[#6B7B8F] mt-0.5">
+                  Register identity and obtain patient triage consent before beginning clinical session
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleLoadBenchmarkDemo}
+                icon={<Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />}
+              >
+                Load Clinical Demo Benchmark
+              </Button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -342,6 +361,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                 </label>
                 <input
                   type="text"
+                  placeholder="Enter full name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
@@ -352,6 +372,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                 <label className="block font-semibold text-[#25364A] mb-1">Age (Years):</label>
                 <input
                   type="number"
+                  placeholder="e.g. 38"
                   value={age}
                   onChange={(e) => setAge(e.target.value)}
                   className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
@@ -375,6 +396,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                 <label className="block font-semibold text-[#25364A] mb-1">Contact Phone (Optional):</label>
                 <input
                   type="text"
+                  placeholder="+91..."
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   className="w-full p-2.5 rounded-lg border border-slate-300 text-xs focus:border-[#2563EB] focus:outline-none"
@@ -397,24 +419,39 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
               </div>
             </div>
 
-            {/* Consent Checkbox Box (Section 21) */}
-            <div className="p-4 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
-              <label className="flex items-start gap-3 select-none cursor-pointer">
+            {/* Consent Checkpoint */}
+            <div className={`p-4 rounded-xl border transition-all ${
+              consentGranted
+                ? 'bg-emerald-50/50 border-emerald-200'
+                : 'bg-amber-50/40 border-amber-200'
+            }`}>
+              <div className="flex items-start gap-3">
                 <input
+                  id="patient-consent-checkbox"
+                  name="patient-consent-checkbox"
                   type="checkbox"
                   checked={consentGranted}
                   onChange={(e) => setConsentGranted(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-slate-300 text-[#2563EB] focus:ring-blue-500 cursor-pointer"
+                  className="mt-1 w-4 h-4 rounded border-slate-300 text-[#2563EB] focus:ring-blue-500 cursor-pointer flex-shrink-0"
                 />
-                <div className="text-xs">
-                  <span className="font-semibold text-[#102033] block">
-                    Use my information for this triage-support session
-                  </span>
-                  <span className="text-[#6B7B8F] leading-relaxed">
-                    We will use the information you provide to organize it for review by qualified healthcare staff.
-                  </span>
-                </div>
-              </label>
+                <label htmlFor="patient-consent-checkbox" className="text-xs cursor-pointer select-none">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#102033]">
+                      Patient / Guardian Informed Consent Checkpoint
+                    </span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      consentGranted
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : 'bg-amber-100 text-amber-800 border-amber-200'
+                    }`}>
+                      {consentGranted ? 'Verified' : 'Required'}
+                    </span>
+                  </div>
+                  <p className="text-[#526276] leading-relaxed mt-1">
+                    I confirm that the patient (or guardian) has received verbal disclosure in their primary language and consented to multimodal intake, voice recording, and AI diagnostic note organization.
+                  </p>
+                </label>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-[#E6ECF2]">
@@ -425,7 +462,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
           </div>
 
           {/* Right Column: Section 6.1 Multilingual Human Illustration & Language Tags */}
-          <div className="lg:col-span-5 xl:col-span-4 bg-gradient-to-b from-[#F0F6FF] to-white rounded-xl border border-blue-100 p-5 shadow-xs flex flex-col justify-between overflow-hidden">
+          <div className="xl:col-span-4 bg-gradient-to-b from-[#F0F6FF] to-white rounded-xl border border-blue-100 p-5 shadow-xs flex flex-col justify-between overflow-hidden">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#2563EB] block mb-1">
                 Multimodal Intake Support
@@ -490,7 +527,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                 <div className="w-10 h-10 rounded-lg bg-blue-100 text-[#2563EB] flex items-center justify-center mb-3">
                   <Mic className="w-5 h-5" />
                 </div>
-                <h4 className="text-sm font-bold text-[#102033]">🎙 Speak</h4>
+                <h4 className="text-sm font-bold text-[#102033]">Speak (Voice)</h4>
                 <p className="text-xs text-[#6B7B8F] mt-1">Record symptoms in any language</p>
               </button>
 
@@ -507,7 +544,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                 <div className="w-10 h-10 rounded-lg bg-slate-100 text-[#25364A] flex items-center justify-center mb-3">
                   <Keyboard className="w-5 h-5" />
                 </div>
-                <h4 className="text-sm font-bold text-[#102033]">⌨ Type</h4>
+                <h4 className="text-sm font-bold text-[#102033]">Type (Manual)</h4>
                 <p className="text-xs text-[#6B7B8F] mt-1">Enter symptoms manually</p>
               </button>
 
@@ -524,7 +561,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                 <div className="w-10 h-10 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center mb-3">
                   <Upload className="w-5 h-5" />
                 </div>
-                <h4 className="text-sm font-bold text-[#102033]">↑ Upload Report</h4>
+                <h4 className="text-sm font-bold text-[#102033]">Upload Report (OCR)</h4>
                 <p className="text-xs text-[#6B7B8F] mt-1">Upload lab reports / prescriptions</p>
               </button>
 
@@ -541,7 +578,7 @@ export const NewIntakeView: React.FC<NewIntakeViewProps> = ({
                 <div className="w-10 h-10 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center mb-3">
                   <Camera className="w-5 h-5" />
                 </div>
-                <h4 className="text-sm font-bold text-[#102033]">📷 Take Photo</h4>
+                <h4 className="text-sm font-bold text-[#102033]">Capture Photo (Visual)</h4>
                 <p className="text-xs text-[#6B7B8F] mt-1">Capture a basic visual input</p>
               </button>
             </div>

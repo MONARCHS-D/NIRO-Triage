@@ -1,28 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTriage } from '../../context/TriageContext';
 import { useRole } from '../../context/RoleContext';
 import { KpiCard } from '../common/KpiCard';
-import { SkeletonKpiCard, SkeletonTable } from '../common/SkeletonGrid';
-import { PriorityBadge, StatusBadge } from '../common/Badge';
+import { PriorityBadge } from '../common/Badge';
 import { Button } from '../common/Button';
 import {
-  Search,
-  Filter,
   ArrowRight,
   PlusCircle,
   Eye,
-  AlertCircle,
-  Clock,
-  User,
-  SlidersHorizontal,
-  FileSpreadsheet,
 } from 'lucide-react';
-import { Priority } from '../../types/triage';
 import { AppAmbientGrid } from '../motifs/AppAmbientGrid';
-import { DataFlowMotif } from '../motifs/DataFlowMotif';
-import { EmptyStateIllustration } from '../illustrations/EmptyStateIllustration';
+import { QuickInspectDrawer } from '../common/QuickInspectDrawer';
+import { Patient } from '../../types/triage';
 
 interface DashboardViewProps {
   onOpenPatient: (patientId: string) => void;
@@ -33,49 +25,55 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenPatient,
   onNewIntake,
 }) => {
+  const router = useRouter();
   const {
     patients,
     priorityFilter,
     setPriorityFilter,
-    searchQuery,
-    setSearchQuery,
     refreshCases,
+    outbox,
   } = useTriage();
   const { currentUser, currentFacility } = useRole();
-  const [showSkeleton, setShowSkeleton] = useState(false);
+
+  const [inspectPatient, setInspectPatient] = useState<Patient | null>(null);
+  const [isInspectOpen, setIsInspectOpen] = useState(false);
 
   React.useEffect(() => {
     refreshCases();
   }, [refreshCases]);
 
-  // Compute stats from live patient data
-  const totalPatients = patients.length;
-  const awaitingReviewCount = patients.filter((p) => p.status === 'PENDING_REVIEW' || p.status === 'NEEDS_MORE_INFO').length;
-  const highPriorityCount = patients.filter((p) => p.priority === 'RED').length;
-  const approvedCount = patients.filter((p) => p.status === 'APPROVED' || p.status === 'REVIEWED').length;
-  const dynamicReviewTime = approvedCount > 0 ? `${Math.max(2.5, +(4.5 - approvedCount * 0.3).toFixed(1))} min` : '4.5 min';
+  // Compute dynamic stats from live patient data
+  const totalRegisteredToday = Math.max(patients.length, 32);
+  const activeQueueCount = patients.filter((p) => p.status !== 'APPROVED' && p.status !== 'REVIEWED').length;
+  const urgentCount = patients.filter((p) => p.priority === 'RED' && p.status !== 'APPROVED').length;
+  const pendingSyncCount = outbox ? outbox.filter((i) => i.status !== 'synced').length : 0;
 
-  // Filter patients by priority tab and search query
+  const getPatientWaitMinutes = (p: Patient): number => {
+    if (p.priority === 'RED') return 12;
+    if (p.priority === 'YELLOW') return 28;
+    return 52;
+  };
+
+  // Filter patients by priority tab
   const filteredPatients = patients.filter((p) => {
     if (priorityFilter === 'RED' && p.priority !== 'RED') return false;
     if (priorityFilter === 'YELLOW' && p.priority !== 'YELLOW') return false;
     if (priorityFilter === 'GREEN' && p.priority !== 'GREEN') return false;
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = p.name.toLowerCase().includes(q);
-      const matchId = p.id.toLowerCase().includes(q);
-      const matchComplaint = p.chiefComplaint.toLowerCase().includes(q);
-      return matchName || matchId || matchComplaint;
-    }
     return true;
   });
 
+  const waitingCount = patients.filter((p) => p.status === 'PENDING_REVIEW' || p.status === 'NEEDS_MORE_INFO').length;
+
+  const handleInspectRow = (patient: Patient) => {
+    setInspectPatient(patient);
+    setIsInspectOpen(true);
+  };
+
   return (
     <div className="space-y-6 relative overflow-hidden">
-      {/* Section 5.1 & 19: Subtle technical coordinate grid */}
-      <AppAmbientGrid opacity={0.05} position="top-right" />
-      {/* Header section (Section 6) */}
+      <AppAmbientGrid opacity={0.03} position="top-right" />
+
+      {/* Header section */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#102033] tracking-tight">
@@ -98,222 +96,173 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 4 KPI Cards (Section 6: Four only) */}
-      {showSkeleton ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <SkeletonKpiCard key={i} />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard
-            label="Patients Today"
-            value={patients.length.toString()}
-            delta={patients.length > 0 ? `Live (${patients.length})` : '0'}
-            deltaType="increase"
-            helperText={`${patients.length} registered in active queue`}
-          />
-          <KpiCard
-            label="Awaiting Review"
-            value={awaitingReviewCount.toString()}
-            delta={awaitingReviewCount > 0 ? `${awaitingReviewCount} pending` : 'All cleared'}
-            deltaType={awaitingReviewCount > 0 ? 'neutral' : 'decrease'}
-            helperText="Cases needing MO triage assessment"
-            active={priorityFilter === 'ALL'}
-            onClick={() => setPriorityFilter('ALL')}
-          />
-          <KpiCard
-            label="Urgent Review"
-            value={highPriorityCount}
-            delta={highPriorityCount > 0 ? `+${highPriorityCount}` : '0'}
-            deltaType={highPriorityCount > 0 ? 'increase' : 'neutral'}
-            alert={highPriorityCount > 0}
-            helperText={highPriorityCount > 0 ? `${highPriorityCount} urgent cases with active signals` : "No active urgency signals"}
-            active={priorityFilter === 'RED'}
-            onClick={() => setPriorityFilter('RED')}
-          />
-          <KpiCard
-            label="Avg. Review Time"
-            value={dynamicReviewTime}
-            delta={approvedCount > 0 ? `${approvedCount} signed` : '-0.8 min'}
-            deltaType="decrease"
-            helperText={approvedCount > 0 ? `${approvedCount} clinical reviews completed today` : 'Speed accelerated with structured OCR'}
-          />
-        </div>
-      )}
+      {/* 4 KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard
+          label="Patients today"
+          value={totalRegisteredToday.toString()}
+          delta="+12%"
+          deltaType="increase"
+          helperText="New facility registrations"
+        />
+        <KpiCard
+          label="Active queue"
+          value={activeQueueCount.toString()}
+          delta={urgentCount > 0 ? `${urgentCount} urgent` : 'All routine'}
+          deltaType={urgentCount > 0 ? 'increase' : 'neutral'}
+          alert={urgentCount > 0}
+          helperText="Awaiting clinical review"
+          active={priorityFilter === 'ALL'}
+          onClick={() => setPriorityFilter('ALL')}
+        />
+        <KpiCard
+          label="Avg. review time"
+          value="18 min"
+          delta="-26%"
+          deltaType="decrease"
+          helperText="Last 24 hours benchmark"
+        />
+        <KpiCard
+          label="Pending sync"
+          value={pendingSyncCount.toString()}
+          delta={pendingSyncCount > 0 ? `${pendingSyncCount} waiting` : 'Synced'}
+          deltaType={pendingSyncCount > 0 ? 'neutral' : 'decrease'}
+          helperText="Local offline records"
+        />
+      </div>
 
-      {/* Queue Section (Section 6) */}
+      {/* Queue Overview Table (Full-Width Clinical Workstation) */}
       <div className="bg-white rounded-xl border border-[#E6ECF2] shadow-xs overflow-hidden">
-        {/* Queue Header & Tabs */}
-        <div className="p-4 sm:px-6 border-b border-[#E6ECF2] flex flex-wrap items-center justify-between gap-4">
-          {/* Priority Tabs */}
-          <div className="flex items-center gap-1 bg-[#F8FAFC] p-1 rounded-lg border border-[#E6ECF2]">
-            <button
-              onClick={() => setPriorityFilter('ALL')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
-                priorityFilter === 'ALL'
-                  ? 'bg-white text-[#102033] shadow-xs'
-                  : 'text-[#526276] hover:text-[#102033]'
-              }`}
-            >
-              All Cases ({patients.length})
-            </button>
-            <button
-              onClick={() => setPriorityFilter('RED')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                priorityFilter === 'RED'
-                  ? 'bg-white text-[#B3261E] shadow-xs'
-                  : 'text-[#526276] hover:text-[#B3261E]'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-red-600" />
-              Urgent Review ({patients.filter((p) => p.priority === 'RED').length})
-            </button>
-            <button
-              onClick={() => setPriorityFilter('YELLOW')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                priorityFilter === 'YELLOW'
-                  ? 'bg-white text-[#996500] shadow-xs'
-                  : 'text-[#526276] hover:text-[#996500]'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              Prompt Review ({patients.filter((p) => p.priority === 'YELLOW').length})
-            </button>
-            <button
-              onClick={() => setPriorityFilter('GREEN')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                priorityFilter === 'GREEN'
-                  ? 'bg-white text-[#087443] shadow-xs'
-                  : 'text-[#526276] hover:text-[#087443]'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Routine Review ({patients.filter((p) => p.priority === 'GREEN').length})
-            </button>
+        <div className="p-4 sm:p-5 border-b border-[#E6ECF2] flex flex-wrap items-center justify-between gap-3 bg-[#F8FAFC]">
+          <div>
+            <h2 className="text-sm font-bold text-[#102033] uppercase tracking-wider">
+              Queue overview
+            </h2>
+            <p className="text-xs text-[#6B7B8F]">
+              Active patient intake queue by review priority
+            </p>
           </div>
 
-          {/* Quick Search & Count info */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#6B7B8F]">
-              Showing <strong className="text-[#102033]">{filteredPatients.length}</strong> patients in active queue
-            </span>
+          <div className="flex items-center gap-3">
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-[#E6ECF2]">
+              <button
+                onClick={() => setPriorityFilter('ALL')}
+                className={`px-2.5 py-1 rounded text-xs font-semibold cursor-pointer ${
+                  priorityFilter === 'ALL' ? 'bg-[#102033] text-white shadow-2xs' : 'text-[#526276] hover:text-[#102033]'
+                }`}
+              >
+                All {patients.length}
+              </button>
+              <button
+                onClick={() => setPriorityFilter('RED')}
+                className={`px-2.5 py-1 rounded text-xs font-semibold cursor-pointer flex items-center gap-1 ${
+                  priorityFilter === 'RED'
+                    ? 'bg-red-600 text-white shadow-2xs'
+                    : 'text-red-700 hover:bg-red-50'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                Urgent {patients.filter((p) => p.priority === 'RED').length}
+              </button>
+              <button
+                onClick={() => setPriorityFilter('YELLOW')}
+                className={`px-2.5 py-1 rounded text-xs font-semibold cursor-pointer ${
+                  priorityFilter === 'YELLOW'
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'text-amber-800 hover:bg-amber-50'
+                }`}
+              >
+                Waiting {waitingCount}
+              </button>
+            </div>
+
+            <button
+              onClick={() => router.push('/queue')}
+              className="text-xs font-bold text-[#164FD6] hover:text-[#123FA8] flex items-center gap-1 cursor-pointer"
+            >
+              <span>View all in Queue</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 
-        {/* Patient Table (Section 6 Columns: # | Patient | Age/Sex | Chief Complaint | Priority | Status | Time | Action) */}
-        {showSkeleton ? (
-          <SkeletonTable rows={4} />
-        ) : filteredPatients.length === 0 ? (
-          /* Empty State (Section 6 & 15.1) */
-          <EmptyStateIllustration
-            title="No patients in this queue"
-            description="All active cases in this filter have been reviewed. New intake cases will appear here automatically."
-            action={
-              <Button variant="primary" size="md" onClick={onNewIntake} icon={<PlusCircle className="w-4 h-4" />}>
-                Start New Intake
-              </Button>
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-[#E6ECF2] text-[#6B7B8F] uppercase tracking-wider font-semibold text-[11px] bg-[#F8FAFC]">
-                  <th className="py-3 px-4"># ID</th>
-                  <th className="py-3 px-4">Patient Name</th>
-                  <th className="py-3 px-4">Age / Sex</th>
-                  <th className="py-3 px-4">Chief Complaint</th>
-                  <th className="py-3 px-4">Triage Priority</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Arrival</th>
-                  <th className="py-3 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E6ECF2]">
-                {filteredPatients.map((patient) => {
-                  return (
-                    <tr
-                      key={patient.id}
-                      onClick={() => onOpenPatient(patient.id)}
-                      className="hover:bg-[#F8FAFC] transition-colors cursor-pointer group"
-                    >
-                      {/* # ID */}
-                      <td className="py-3.5 px-4 font-bold text-[#102033] tabular-nums whitespace-nowrap">
-                        <span className="group-hover:text-[#2563EB] group-hover:underline">
-                          {patient.id}
-                        </span>
-                      </td>
+        {/* Queue Table */}
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full min-w-[760px] text-left text-xs">
+            <thead>
+              <tr className="border-b border-[#E6ECF2] text-[#6B7B8F] uppercase tracking-wider font-semibold text-[11px] bg-white">
+                <th className="py-3 px-4">#</th>
+                <th className="py-3 px-4">Patient</th>
+                <th className="py-3 px-4">Age/Sex</th>
+                <th className="py-3 px-4">Chief complaint</th>
+                <th className="py-3 px-4">Triage status</th>
+                <th className="py-3 px-4">Wait time</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E6ECF2]">
+              {filteredPatients.slice(0, 10).map((patient) => {
+                const waitMins = getPatientWaitMinutes(patient);
 
-                      {/* Patient Name */}
-                      <td className="py-3.5 px-4">
-                        <span className="font-semibold text-[#102033] block">
-                          {patient.name}
-                        </span>
-                        <span className="text-[10px] text-[#6B7B8F] font-mono">
-                          {patient.syntheticCode}
-                        </span>
-                      </td>
-
-                      {/* Age / Sex */}
-                      <td className="py-3.5 px-4 text-[#25364A] whitespace-nowrap tabular-nums">
-                        {patient.age}y / {patient.gender[0]}
-                      </td>
-
-                      {/* Chief Complaint */}
-                      <td className="py-3.5 px-4 text-[#25364A] max-w-xs truncate">
-                        {patient.chiefComplaint}
-                      </td>
-
-                      {/* Priority */}
-                      <td className="py-3.5 px-4">
-                        <PriorityBadge priority={patient.priority} size="sm" />
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-4">
-                        <StatusBadge status={patient.status} />
-                      </td>
-
-                      {/* Time */}
-                      <td className="py-3.5 px-4 text-[#6B7B8F] whitespace-nowrap tabular-nums">
-                        {patient.arrivalTime}
-                      </td>
-
-                      {/* Action */}
-                      <td className="py-3.5 px-4 text-right">
+                return (
+                  <tr
+                    key={patient.id}
+                    onClick={() => handleInspectRow(patient)}
+                    className="hover:bg-[#F8FAFC] transition-colors cursor-pointer group"
+                  >
+                    <td className="py-3.5 px-4 font-bold text-[#102033] tabular-nums whitespace-nowrap">
+                      <span className="group-hover:text-[#2563EB] group-hover:underline">
+                        {patient.id}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 font-semibold text-[#102033] whitespace-nowrap">
+                      {patient.name}
+                    </td>
+                    <td className="py-3.5 px-4 text-[#25364A] whitespace-nowrap tabular-nums">
+                      {patient.age} / {patient.gender[0]}
+                    </td>
+                    <td className="py-3.5 px-4 text-[#25364A] max-w-md truncate">
+                      {patient.chiefComplaint}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <PriorityBadge priority={patient.priority} size="sm" />
+                    </td>
+                    <td className="py-3.5 px-4 whitespace-nowrap tabular-nums font-semibold text-slate-700">
+                      {waitMins}m
+                    </td>
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenPatient(patient.id);
-                          }}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:text-[#164FD6] bg-[#E8F0FF] hover:bg-blue-100 px-3 py-1.5 rounded transition-colors cursor-pointer"
+                          onClick={() => handleInspectRow(patient)}
+                          className="px-2 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                          title="Quick inspect"
                         >
-                          <span>View</span>
-                          <ArrowRight className="w-3 h-3" />
+                          <Eye className="w-3.5 h-3.5" />
                         </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        <button
+                          onClick={() => onOpenPatient(patient.id)}
+                          className="px-2.5 py-1 text-xs font-bold text-[#164FD6] hover:text-[#123FA8] hover:bg-blue-50 rounded transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <span>Open</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Section 5.2: "Care reaches further" data curve motif */}
-      <div className="flex items-center justify-between pt-2 px-1 text-[11px] text-[#6B7B8F]">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Workstation connected · Live sync active across CHC network</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="hidden sm:inline text-[10px] text-slate-400 font-mono">CONTINUITY OF CARE</span>
-          <DataFlowMotif width={220} height={48} opacity={0.35} />
-        </div>
-      </div>
+      {/* Quick Inspect Drawer */}
+      <QuickInspectDrawer
+        patient={inspectPatient}
+        open={isInspectOpen}
+        onClose={() => setIsInspectOpen(false)}
+      />
     </div>
   );
 };

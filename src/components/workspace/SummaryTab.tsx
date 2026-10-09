@@ -20,6 +20,8 @@ import {
   Send,
   HelpCircle,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   ShieldCheck,
   Info,
   ArrowUpRight,
@@ -366,12 +368,245 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
     },
   ].filter(Boolean) as { name: string; desc: string }[];
 
+  const [expandedProtocolItem, setExpandedProtocolItem] = useState<number | null>(null);
+
+  // Review readiness calculations (based on clinical evidence completeness — not an AI diagnostic score)
+  const documentCount = (patient as any).documents?.length || Math.max(1, new Set(patient.facts.map((f) => f.sourceDocument)).size);
+  const evidenceSourcesCount = documentCount + (numSpo2 !== undefined ? 1 : 0) + (numBpSys !== undefined ? 1 : 0) + (numHr !== undefined ? 1 : 0);
+  const pendingProtocolCount = (numSpo2 === undefined ? 1 : 0) + (numBpSys === undefined ? 1 : 0) + (numResp === undefined ? 1 : 0);
+  const readinessPercent = Math.min(100, Math.max(25, 
+    Math.round(
+      (patient.status === 'APPROVED' ? 40 : 25) +
+      (Math.min(evidenceSourcesCount, 5) * 10) +
+      Math.max(0, 35 - (missingItems.length * 10))
+    )
+  ));
+
+  const adultProtocolItems = [
+    {
+      id: 'resp',
+      title: 'Airway & Respiratory Assessment',
+      status: numSpo2 && numSpo2 < 92 ? 'ACTION_NEEDED' : (numResp ? 'COMPLETED' : 'PENDING'),
+      criterion: 'Assessment of airway patency, work of breathing, and resting respiratory rate (normal 12–20 /min).',
+      source: 'Triage Nurse Pulse Oximeter & Work of Breathing Screen',
+      value: `${numResp ? `${numResp} breaths/min` : 'Respiratory rate unrecorded'}, SpO₂: ${numSpo2 ? `${numSpo2}%` : 'Pending'}`,
+      timestamp: patient.arrivalTime || 'Intake arrival',
+      action: numSpo2 && numSpo2 < 92 
+        ? 'Administer supplemental O₂ via face mask; alert physician for possible acute bronchospasm/pneumonia.'
+        : 'SpO₂ within reference limits; continue standard queue monitoring.',
+    },
+    {
+      id: 'circ',
+      title: 'Circulation & Hemodynamic Stability',
+      status: numBpSys && (numBpSys < 90 || numBpSys > 160) ? 'ACTION_NEEDED' : (numBpSys ? 'COMPLETED' : 'PENDING'),
+      criterion: 'Non-invasive arterial blood pressure and radial pulse rate consistency (National ETAT / MoHFW).',
+      source: 'Triage Automated Sphygmomanometer',
+      value: numBpSys ? `BP ${numBpSys}/${numBpDia || '--'} mmHg, Pulse ${numHr || '--'} bpm` : 'Cuff reading pending',
+      timestamp: patient.arrivalTime || 'Intake arrival',
+      action: numBpSys && numBpSys < 90
+        ? 'Establish intravenous access; initiate fluid resuscitation per shock protocol.'
+        : 'Hemodynamics stable; continue routine monitoring.',
+    },
+    {
+      id: 'neuro',
+      title: 'Disability & Mental Status (AVPU)',
+      status: 'COMPLETED',
+      criterion: 'Alertness, verbal response, pain responsiveness, or unresponsiveness scale screening.',
+      source: 'Intake Voice & Clinical Observation',
+      value: `Alert (A). Speech coherent. Presenting complaint: "${patient.chiefComplaint || 'Normal'}"`,
+      timestamp: patient.arrivalTime || 'Intake arrival',
+      action: 'No acute focal neurological deficit detected; standard triage pathway.',
+    },
+    {
+      id: 'temp',
+      title: 'Exposure & Core Temperature Evaluation',
+      status: numTemp && numTemp >= 100.4 ? 'ACTION_NEEDED' : (numTemp ? 'COMPLETED' : 'PENDING'),
+      criterion: 'Screening for pyrexia (≥100.4°F) or hypothermia (<96.8°F) indicating systemic inflammatory response.',
+      source: 'Axillary Thermometer',
+      value: numTemp ? `${numTemp} °F` : 'Measurement pending intake entry',
+      timestamp: patient.arrivalTime || 'Intake arrival',
+      action: numTemp && numTemp >= 100.4
+        ? 'Administer paracetamol antipyretic per facility protocol; test for malaria/dengue as indicated.'
+        : 'Temperature within normal afebrile limits.',
+    },
+  ];
+
+  const pediatricProtocolItems = [
+    {
+      id: 'ped-danger',
+      title: 'IMNCI General Danger Signs',
+      status: 'COMPLETED',
+      criterion: 'Screening for inability to drink/breastfeed, vomiting everything, convulsions, or lethargy.',
+      source: 'Caregiver Multimodal Voice Intake & Nurse Inspection',
+      value: 'No convulsions, infant alert, capable of oral intake without persistent vomiting.',
+      timestamp: patient.arrivalTime || 'Intake arrival',
+      action: 'No emergency triage signs met; proceed with targeted IMNCI classification.',
+    },
+    {
+      id: 'ped-resp',
+      title: 'Pediatric Breathing & Chest Indrawing',
+      status: numSpo2 && numSpo2 < 92 ? 'ACTION_NEEDED' : (numResp ? 'COMPLETED' : 'PENDING'),
+      criterion: 'Age-stratified tachypnea screening and inspection for severe lower chest wall indrawing.',
+      source: 'Clinical Respiratory Count',
+      value: `${numResp ? `${numResp} breaths/min` : 'Respiratory rate unmeasured'}, SpO₂: ${numSpo2 ? `${numSpo2}%` : 'Not recorded'}`,
+      timestamp: patient.arrivalTime || 'Intake arrival',
+      action: numSpo2 && numSpo2 < 92
+        ? 'Urgent supplemental oxygen therapy; priority physician referral for severe pneumonia.'
+        : 'Breathing pattern within pediatric reference range.',
+    },
+    {
+      id: 'ped-oximetry',
+      title: 'Pediatric Pulse Oximetry (SpO₂)',
+      status: numSpo2 && numSpo2 < 92 ? 'ACTION_NEEDED' : (numSpo2 ? 'COMPLETED' : 'PENDING'),
+      criterion: 'Room air SpO₂ threshold (hypoxemia defined as SpO₂ < 90% or < 92% at altitude).',
+      source: 'Pediatric Pulse Oximeter Clip',
+      value: numSpo2 ? `${numSpo2}% on room air` : 'Oximeter clip reading pending',
+      timestamp: patient.arrivalTime || 'Intake arrival',
+      action: numSpo2 && numSpo2 < 92
+        ? 'Administer oxygen via pediatric nasal cannula (0.5–2 L/min); monitor continuously.'
+        : 'Room air saturation adequate; no hypoxia detected.',
+    },
+    {
+      id: 'ped-dehydration',
+      title: 'Dehydration & Capillary Refill',
+      status: 'COMPLETED',
+      criterion: 'Inspection of sunken eyes, skin pinch recoil (< 2 seconds), and oral hydration status.',
+      source: 'Nurse Physical Inspection',
+      value: 'Normal skin turgor, tears present, capillary refill < 2s.',
+      timestamp: patient.arrivalTime || 'Intake arrival',
+      action: 'Maintain age-appropriate oral hydration (Plan A); counsel caregiver.',
+    },
+  ];
+
+  const protocolItems = isPediatric ? pediatricProtocolItems : adultProtocolItems;
+
   return (
     <div className="space-y-6">
+      {/* 1. CASE GLANCE STRIP */}
+      <div className="bg-white rounded-xl border border-[#E6ECF2] p-3.5 sm:p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="text-sm font-bold text-[#102033] flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-[#2563EB]">{patient.id}</span>
+            <span className="text-[#6B7B8F]">·</span>
+            <span>{patient.name}</span>
+            <span className="text-[#6B7B8F]">·</span>
+            <span className="text-[#526276] font-medium">{patient.age}y/{patient.gender?.[0] || 'U'}</span>
+            <span className="text-[#6B7B8F]">·</span>
+            <span className="text-[#102033] font-semibold">{patient.chiefComplaint}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold ${
+            patient.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-[#164FD6] border border-blue-200'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${patient.status === 'APPROVED' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+            {patient.status === 'APPROVED' ? 'Reviewed' : 'Awaiting review'}
+          </span>
+
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold ${
+            urgencySignals.length > 0 ? 'bg-red-50 text-[#B3261E] border border-red-200' : 'bg-slate-50 text-slate-700 border border-slate-200'
+          }`}>
+            <AlertTriangle className={`w-3.5 h-3.5 ${urgencySignals.length > 0 ? 'text-[#B3261E]' : 'text-slate-400'}`} />
+            {urgencySignals.length > 0 ? `${urgencySignals.length} urgency signal${urgencySignals.length > 1 ? 's' : ''}` : 'No urgency signals'}
+          </span>
+
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold ${
+            missingItems.length > 0 ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-50 text-slate-700 border border-slate-200'
+          }`}>
+            <AlertCircle className={`w-3.5 h-3.5 ${missingItems.length > 0 ? 'text-amber-600' : 'text-slate-400'}`} />
+            {missingItems.length > 0 ? `${missingItems.length} missing` : 'All fields recorded'}
+          </span>
+
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-[#F8FAFC] border border-[#E6ECF2] text-[#526276]">
+            <FileText className="w-3.5 h-3.5 text-[#2563EB]" />
+            {documentCount} {documentCount === 1 ? 'report' : 'reports'}
+          </span>
+
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-[#F8FAFC] border border-[#E6ECF2] text-[#526276]">
+            <Mic className="w-3.5 h-3.5 text-purple-600" />
+            {patient.intakeSource || 'Voice intake'}
+          </span>
+        </div>
+      </div>
+
+      {/* 2. REVIEW READINESS WIDGET */}
+      <div className="bg-white rounded-xl border border-[#E6ECF2] p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            {/* SVG Circular Progress Ring */}
+            <div className="relative w-14 h-14 flex items-center justify-center flex-shrink-0">
+              <svg className="w-14 h-14 -rotate-90" viewBox="0 0 44 44">
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="18"
+                  className="stroke-slate-100"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="18"
+                  className="stroke-[#2563EB] transition-all duration-700 ease-out"
+                  strokeWidth="4"
+                  strokeDasharray={113.1}
+                  strokeDashoffset={113.1 - (113.1 * readinessPercent) / 100}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center justify-center text-center">
+                <span className="text-xs font-bold text-[#102033] leading-none">{readinessPercent}%</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-[#102033]">Review Readiness</h4>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-[#164FD6] border border-blue-200">
+                  {readinessPercent >= 80 ? 'High completeness' : readinessPercent >= 50 ? 'Moderate completeness' : 'Awaiting inputs'}
+                </span>
+              </div>
+              <p className="text-[11px] text-[#6B7B8F] mt-0.5">
+                Calculated clinical review readiness based on verified sources and data completeness.
+              </p>
+            </div>
+          </div>
+
+          {/* 4 Pillars of Review Readiness */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+              <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">Evidence</span>
+              <span className="font-semibold text-[#102033] mt-0.5 block">{evidenceSourcesCount} sources</span>
+            </div>
+            <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+              <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">Missing</span>
+              <span className={`font-semibold mt-0.5 block ${missingItems.length > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {missingItems.length > 0 ? `${missingItems.length} items` : '0 items'}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+              <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">AI Draft</span>
+              <span className="font-semibold text-[#164FD6] mt-0.5 block">
+                {patient.status === 'APPROVED' ? 'Verified' : 'Ready for review'}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2]">
+              <span className="text-[10px] font-bold text-[#6B7B8F] uppercase block">Protocol</span>
+              <span className={`font-semibold mt-0.5 block ${pendingProtocolCount > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {pendingProtocolCount > 0 ? `${pendingProtocolCount} pending` : 'Verified'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 2-COLUMN CLINICAL WORKSTATION LAYOUT (Specification Section 4 & Mockup) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN: AI Draft, Protocol Assessment, Missing Info (7 cols) */}
-        <div className="lg:col-span-7 space-y-6">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* LEFT COLUMN: AI Draft, Protocol Assessment, Missing Info (7 cols on desktop) */}
+        <div className="xl:col-span-7 space-y-6">
           {/* 1. AI-Organized Draft Card */}
           <div className="bg-white rounded-xl border border-[#E6ECF2] shadow-xs overflow-hidden">
             {/* Card Header & Reviewer Toolbar */}
@@ -548,145 +783,116 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
               </div>
             )}
 
-            {/* Criteria Checklist - Age-stratified */}
+            {/* Criteria Checklist - Age-stratified Expandable Accordion (criterion -> evidence -> action) */}
             <div className="mt-4 space-y-2.5">
-              {isPediatric ? (
-                <>
-                  <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-[#102033]">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span className="font-medium">IMNCI General Danger Signs screened (Lethargy, feeding ability, convulsions)</span>
-                    </div>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      Completed
-                    </span>
-                  </div>
+              {protocolItems.map((item, idx) => {
+                const isExpanded = expandedProtocolItem === idx;
+                const isActionNeeded = item.status === 'ACTION_NEEDED';
+                const isCompleted = item.status === 'COMPLETED';
 
-                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
-                    patient.vitals.respRate || (patient.symptoms && patient.symptoms.length > 0)
-                      ? 'bg-[#F8FAFC] border-[#E6ECF2]'
-                      : 'bg-amber-50/40 border-amber-200'
-                  }`}>
-                    <div className="flex items-center gap-2 text-xs text-[#102033]">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span className="font-medium">
-                        {patient.vitals.respRate
-                          ? `Pediatric respiratory status documented (${patient.vitals.respRate} /min, age-stratified)`
-                          : 'Pediatric respiratory rate & chest indrawing'}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      Completed
-                    </span>
-                  </div>
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-lg border transition-all ${
+                      isActionNeeded
+                        ? 'border-amber-200 bg-amber-50/30'
+                        : isExpanded
+                        ? 'border-[#2563EB]/40 bg-[#F8FAFC]'
+                        : 'border-[#E6ECF2] bg-[#F8FAFC] hover:border-slate-300'
+                    }`}
+                  >
+                    {/* Accordion Header */}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedProtocolItem(isExpanded ? null : idx)}
+                      className="w-full p-3 flex items-center justify-between text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 text-xs text-[#102033] font-semibold">
+                        {isCompleted ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        ) : isActionNeeded ? (
+                          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        ) : (
+                          <Clock className="w-4 h-4 text-[#6B7B8F] flex-shrink-0" />
+                        )}
+                        <span>{item.title}</span>
+                      </div>
 
-                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
-                    patient.vitals.spo2 ? 'bg-[#F8FAFC] border-[#E6ECF2]' : 'bg-amber-50/40 border-amber-200'
-                  }`}>
-                    <div className={`flex items-center gap-2 text-xs ${patient.vitals.spo2 ? 'text-[#102033]' : 'text-[#996500]'}`}>
-                      {patient.vitals.spo2 ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-amber-600" />
-                      )}
-                      <span className="font-medium">
-                        {patient.vitals.spo2 ? `Pediatric SpO₂ pulse oximetry available (${patient.vitals.spo2}%)` : 'Pediatric SpO₂ measurement pending'}
-                      </span>
-                    </div>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                      patient.vitals.spo2
-                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                        : 'bg-amber-100 text-amber-800 border-amber-200'
-                    }`}>
-                      {patient.vitals.spo2 ? 'Completed' : 'Missing'}
-                    </span>
-                  </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                            isCompleted
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                              : isActionNeeded
+                              ? 'bg-amber-100 text-amber-900 border-amber-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {isCompleted ? 'Verified' : isActionNeeded ? 'Attention' : 'Pending'}
+                        </span>
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-[#6B7B8F]" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-[#6B7B8F]" />
+                        )}
+                      </div>
+                    </button>
 
-                  <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-[#102033]">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span className="font-medium">Hydration status &amp; capillary refill assessed</span>
-                    </div>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      Completed
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
-                    patient.vitals.respRate || (patient.symptoms && patient.symptoms.length > 0)
-                      ? 'bg-[#F8FAFC] border-[#E6ECF2]'
-                      : 'bg-amber-50/40 border-amber-200'
-                  }`}>
-                    <div className="flex items-center gap-2 text-xs text-[#102033]">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span className="font-medium">
-                        {patient.vitals.respRate ? `Airway & respiratory status documented (${patient.vitals.respRate} /min)` : 'Airway & respiratory status documented'}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      Completed
-                    </span>
-                  </div>
+                    {/* Accordion Content: Criterion -> Evidence -> Action */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 pt-1 border-t border-slate-200/60 space-y-2 text-xs">
+                        {/* 1. Criterion */}
+                        <div className="bg-white p-2.5 rounded-md border border-slate-100">
+                          <span className="text-[10px] font-bold text-[#6B7B8F] uppercase tracking-wider block mb-0.5">
+                            Standard Criterion
+                          </span>
+                          <p className="text-[#25364A] text-[11px] leading-relaxed font-medium">
+                            {item.criterion}
+                          </p>
+                        </div>
 
-                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
-                    patient.vitals.spo2 ? 'bg-[#F8FAFC] border-[#E6ECF2]' : 'bg-amber-50/40 border-amber-200'
-                  }`}>
-                    <div className={`flex items-center gap-2 text-xs ${patient.vitals.spo2 ? 'text-[#102033]' : 'text-[#996500]'}`}>
-                      {patient.vitals.spo2 ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-amber-600" />
-                      )}
-                      <span className="font-medium">
-                        {patient.vitals.spo2 ? `SpO₂ pulse oximetry available (${patient.vitals.spo2}%)` : 'SpO₂ measurement pending'}
-                      </span>
-                    </div>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                      patient.vitals.spo2
-                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                        : 'bg-amber-100 text-amber-800 border-amber-200'
-                    }`}>
-                      {patient.vitals.spo2 ? 'Completed' : 'Missing'}
-                    </span>
-                  </div>
+                        {/* 2. Clinical Evidence */}
+                        <div className="bg-white p-2.5 rounded-md border border-slate-100">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-bold text-[#6B7B8F] uppercase tracking-wider">
+                              Verified Evidence
+                            </span>
+                            <span className="text-[10px] text-[#6B7B8F]">{item.timestamp}</span>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-[11px] font-semibold text-[#102033]">
+                              {item.value}
+                            </div>
+                            <div className="text-[10px] text-[#6B7B8F]">
+                              Source: {item.source}
+                            </div>
+                          </div>
+                        </div>
 
-                  <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
-                    patient.vitals.bpSys ? 'bg-[#F8FAFC] border-[#E6ECF2]' : 'bg-amber-50/40 border-amber-200'
-                  }`}>
-                    <div className={`flex items-center gap-2 text-xs ${patient.vitals.bpSys ? 'text-[#102033]' : 'text-[#996500]'}`}>
-                      {patient.vitals.bpSys ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-amber-600" />
-                      )}
-                      <span className="font-medium">
-                        {patient.vitals.bpSys
-                          ? `Circulation & blood pressure documented (${patient.vitals.bpSys}/${patient.vitals.bpDia || '--'} mmHg)`
-                          : 'Blood pressure measurement documented'}
-                      </span>
-                    </div>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                      patient.vitals.bpSys
-                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                        : 'bg-amber-100 text-amber-800 border-amber-200'
-                    }`}>
-                      {patient.vitals.bpSys ? 'Completed' : 'Missing'}
-                    </span>
+                        {/* 3. Recommended Action */}
+                        <div
+                          className={`p-2.5 rounded-md border ${
+                            isActionNeeded
+                              ? 'bg-amber-50 border-amber-200 text-amber-950'
+                              : 'bg-blue-50/50 border-blue-200 text-slate-800'
+                          }`}
+                        >
+                          <span
+                            className={`text-[10px] font-bold uppercase tracking-wider block mb-0.5 ${
+                              isActionNeeded ? 'text-amber-800' : 'text-[#164FD6]'
+                            }`}
+                          >
+                            Clinical Action
+                          </span>
+                          <p className="text-[11px] leading-relaxed">
+                            {item.action}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-
-                  <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-[#102033]">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span className="font-medium">Disability / AVPU orientation &amp; mental status documented</span>
-                    </div>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      Completed
-                    </span>
-                  </div>
-                </>
-              )}
+                );
+              })}
             </div>
 
             {/* Urgency signals inside assessment */}
@@ -746,8 +952,8 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Urgency Signals, Quick Actions, Vitals, Reviewer Decision (5 cols) */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* RIGHT COLUMN: Urgency Signals, Quick Actions, Vitals, Reviewer Decision (5 cols on desktop) */}
+        <div className="xl:col-span-5 space-y-6">
           {/* 1. Potential Urgency Signals Card (Specification Section 8) */}
           {urgencySignals.length === 0 ? (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-xs">

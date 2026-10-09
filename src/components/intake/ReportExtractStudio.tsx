@@ -271,10 +271,10 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
         </div>
       )}
 
-      {/* Main 50/50 Split Layout (Desktop) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[540px]">
-        {/* Left Column: Document Preview (6 cols) */}
-        <div className="lg:col-span-6 bg-[#25364A]/5 border-r border-[#E6ECF2] p-4 flex flex-col justify-between">
+      {/* Main 50/50 Split Layout (Desktop xl+) */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 min-h-[540px]">
+        {/* Left Column: Document Preview (6 cols on desktop) */}
+        <div className="xl:col-span-6 bg-[#25364A]/5 border-r border-[#E6ECF2] p-4 flex flex-col justify-between">
           {/* Document Toolbar */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-200 text-xs">
             <div className="flex items-center gap-1.5 font-medium text-[#25364A]">
@@ -431,8 +431,8 @@ export const ReportExtractStudio: React.FC<ReportExtractStudioProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Extracted Information (AI) (6 cols) */}
-        <div className="lg:col-span-6 p-6 flex flex-col justify-between space-y-6">
+        {/* Right Column: Extracted Information (AI) (6 cols on desktop) */}
+        <div className="xl:col-span-6 p-6 flex flex-col justify-between space-y-6">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>

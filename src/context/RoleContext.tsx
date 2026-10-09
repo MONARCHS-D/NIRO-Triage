@@ -15,6 +15,9 @@ interface RoleContextType {
   isOffline: boolean;
   isAuthenticated: boolean;
   isSessionExpired: boolean;
+  isSidebarCollapsed: boolean;
+  setIsSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebar: () => void;
   setCurrentUser: (user: UserProfile) => void;
   setCurrentFacility: (facility: Facility) => void;
   setUserRole: (role: UserRole) => void;
@@ -44,6 +47,22 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     return true;
   });
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('niro_sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
+
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('niro_sidebar_collapsed', String(next));
+      }
+      return next;
+    });
+  }, []);
 
   const setUserRole = useCallback((role: UserRole) => {
     const matched = users.find((u) => u.role === role);
@@ -186,6 +205,9 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         isOffline,
         isAuthenticated,
         isSessionExpired,
+        isSidebarCollapsed,
+        setIsSidebarCollapsed,
+        toggleSidebar,
         setCurrentUser,
         setCurrentFacility,
         setUserRole,

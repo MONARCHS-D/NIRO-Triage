@@ -147,11 +147,11 @@ export const NotificationBell: React.FC = () => {
         {/* Top Meta Line: Status Indicator + Category + Timestamp */}
         <div className="flex items-center justify-between gap-2 text-xs mb-1.5">
           <div className="flex items-center gap-2">
-            {/* Tiny unread indicator dot */}
+            {/* Tiny unread indicator dot (calm, non-flashing) */}
             {isUnread ? (
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
-                  isUrgentCard ? 'bg-red-500 animate-pulse' : 'bg-[#164FD6]'
+                  isUrgentCard ? 'bg-red-500' : 'bg-[#164FD6]'
                 }`}
                 title="Unread notification"
               />
@@ -181,10 +181,25 @@ export const NotificationBell: React.FC = () => {
             </span>
           </div>
 
-          {/* Quiet, clean timestamp */}
-          <span className="text-[11px] text-[#6B7B8F] font-medium shrink-0">
-            {notif.timestamp}
-          </span>
+          {/* Quiet, clean timestamp + per-card mark as read */}
+          <div className="flex items-center gap-2">
+            {isUnread && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  markAsRead(notif.id);
+                }}
+                className="text-[10px] font-medium text-slate-500 hover:text-slate-800 hover:underline px-1 py-0.5 rounded cursor-pointer"
+                title="Mark this notification as read"
+              >
+                Mark read
+              </button>
+            )}
+            <span className="text-[11px] text-[#6B7B8F] font-medium shrink-0">
+              {notif.timestamp}
+            </span>
+          </div>
         </div>
 
         {/* Title row with clinical icon */}
@@ -282,13 +297,10 @@ export const NotificationBell: React.FC = () => {
       >
         <Bell className="w-4 h-4" />
 
-        {/* Urgent Pulsing Dot or Badge */}
+        {/* Urgent Badge or Normal Badge */}
         {urgentUnreadCount > 0 ? (
-          <span className="absolute -top-1 -right-1 flex h-4 w-4">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-            <span className="relative inline-flex items-center justify-center rounded-full h-4 w-4 bg-red-600 text-[9px] font-bold text-white shadow-xs">
-              {urgentUnreadCount}
-            </span>
+          <span className="absolute -top-1 -right-1 flex items-center justify-center rounded-full h-4 w-4 bg-red-600 text-[9px] font-bold text-white shadow-xs">
+            {urgentUnreadCount}
           </span>
         ) : unreadCount > 0 ? (
           <span className="absolute -top-1 -right-1 flex items-center justify-center rounded-full h-4 w-4 bg-[#164FD6] text-[9px] font-bold text-white shadow-xs">

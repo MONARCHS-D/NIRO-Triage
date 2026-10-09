@@ -257,7 +257,7 @@ export const SyncOutboxDrawer: React.FC<SyncOutboxDrawerProps> = ({ open, onClos
 
           {/* Sync Legend & Rules */}
           <div className="mt-6 p-3 rounded-lg bg-[#F8FAFC] border border-[#E6ECF2] text-[11px] text-[#526276] space-y-1.5">
-            <span className="font-bold text-[#25364A] block">Offline Guarantee</span>
+            <span className="font-bold text-[#25364A] block">Offline Resiliency Protocol</span>
             <p>
               Cases captured offline remain preserved locally in IndexedDB/SQLite cache and will never be overwritten. Once connection is re-established, records sync sequentially with cryptographic audit hashes.
             </p>

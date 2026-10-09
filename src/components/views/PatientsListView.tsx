@@ -94,7 +94,8 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
             }
           />
         ) : (
-          <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full min-w-[760px] text-left text-xs">
             <thead>
               <tr className="border-b border-[#E6ECF2] text-[#6B7B8F] uppercase tracking-wider font-semibold text-[11px] bg-[#F8FAFC]">
                 <th className="py-3 px-4">Patient ID</th>
@@ -150,6 +151,7 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
               ))}
             </tbody>
           </table>
+        </div>
         )}
       </div>
     </div>

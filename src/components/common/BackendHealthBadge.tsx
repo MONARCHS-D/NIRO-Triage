@@ -76,28 +76,23 @@ export const BackendHealthBadge: React.FC = () => {
               ? 'bg-blue-500'
               : status === 'DEGRADED'
               ? 'bg-amber-500'
-              : 'bg-rose-500'
+              : 'bg-slate-400'
           }`}
         />
-        <Database className="w-3 h-3 opacity-70 hidden sm:inline" />
         <span className="font-semibold hidden sm:inline">
           {status === 'ONLINE'
-            ? 'API: Supabase DB'
+            ? healthData?.latency_ms
+              ? `Connected · ${Math.round(healthData.latency_ms)} ms`
+              : 'Connected'
             : status === 'CHECKING'
-            ? 'Connecting...'
+            ? 'Checking sync...'
             : status === 'DEGRADED'
-            ? 'API: Degraded'
-            : 'API: Local Cache'}
+            ? 'Degraded sync'
+            : 'Offline · Local mode'}
         </span>
         <span className="sm:hidden font-semibold">
-          {status === 'ONLINE' ? 'Live' : status === 'CHECKING' ? '...' : 'Offline'}
+          {status === 'ONLINE' ? 'Connected' : status === 'CHECKING' ? '...' : 'Offline'}
         </span>
-
-        {healthData?.latency_ms && status === 'ONLINE' && (
-          <span className="text-[10px] text-emerald-700/80 hidden lg:inline tabular-nums">
-            {Math.round(healthData.latency_ms)}ms
-          </span>
-        )}
       </button>
 
       {/* Health Details Dropdown Modal */}
@@ -152,22 +147,22 @@ export const BackendHealthBadge: React.FC = () => {
               {healthData?.checks && (
                 <div className="pt-2 border-t border-slate-100 space-y-1.5">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Infrastructure Checks
+                    System Services
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-600">Supabase Postgres DB:</span>
+                    <span className="text-slate-600">Central Clinical DB:</span>
                     <span className="font-semibold text-emerald-600 uppercase text-[10px]">
                       {healthData.checks.database || 'Connected'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-600">Task Broker (Redis):</span>
+                    <span className="text-slate-600">Background Processing:</span>
                     <span className="font-semibold text-slate-700 uppercase text-[10px]">
                       {healthData.checks.redis || 'Ready'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-600">Evidence Blob Store:</span>
+                    <span className="text-slate-600">Secure Evidence Vault:</span>
                     <span className="font-semibold text-slate-700 uppercase text-[10px]">
                       {healthData.checks.blob_storage || 'Ready'}
                     </span>
@@ -177,7 +172,7 @@ export const BackendHealthBadge: React.FC = () => {
 
               {status !== 'ONLINE' && (
                 <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800 mt-2">
-                  <span>Backend unreachable at <code>{API_BASE_URL}</code>. The app is seamlessly using resilient offline synthetic storage.</span>
+                  <span>Operating in local resilient mode. All triage updates are safely queued in workstation local storage.</span>
                 </div>
               )}
             </div>
